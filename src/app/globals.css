@@ -1,0 +1,220 @@
+/* Import Tailwind base, components, and utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base Layer - Essential for Shadcn UI */
+@layer base {
+  /* Shadcn UI CSS Variables (Light Mode - Default) */
+  :root {
+    --background: 0 0% 100%; /* White */
+    --foreground: 222.2 84% 4.9%; /* Dark Gray/Black */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 222.2 84% 4.9%; /* Dark Gray/Black */
+
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 222.2 84% 4.9%; /* Dark Gray/Black */
+
+    /* Primary (Used for main buttons, active elements - Adjust HSL as needed) */
+    /* Example: Using your original --button-color (#0f6466) - approx HSL 181 68% 23% */
+    --primary: 181 68% 23%;
+    --primary-foreground: 210 40% 98%; /* Light color for text on primary */
+
+    /* Secondary (Used for less prominent elements, outlines) */
+    --secondary: 210 40% 96.1%; /* Light Gray */
+    --secondary-foreground: 222.2 47.4% 11.2%; /* Dark Gray */
+
+    /* Muted (Used for subtle backgrounds, disabled states) */
+    --muted: 210 40% 96.1%; /* Light Gray */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Medium Gray */
+
+    /* Accent (Used for hover states, highlights - Often similar to primary or secondary) */
+    /* Example: Using your original --navbar-color (#2c3532) - approx HSL 158 6% 19% */
+    --accent: 158 6% 19%;
+    --accent-foreground: 210 40% 98%; /* Light color for text on accent */
+
+    /* Destructive (Used for error states, delete buttons) */
+    --destructive: 0 84.2% 60.2%; /* Red */
+    --destructive-foreground: 210 40% 98%; /* Light color for text on destructive */
+
+    /* Border */
+    --border: 214.3 31.8% 91.4%; /* Light Gray Border */
+    /* Input */
+    --input: 214.3 31.8% 91.4%; /* Light Gray Input Border */
+    /* Ring (Focus outlines) */
+    /* Example: Using your original --button-color for focus rings */
+    --ring: 181 68% 23%;
+
+    /* Radius */
+    --radius: 0.5rem; /* Default Shadcn radius */
+
+    /* Your Custom Variables (Optional - keep if needed for non-Shadcn elements) */
+    /* Consider mapping these to Shadcn vars if possible for consistency */
+    --custom-button-color: 181 68% 23%; /* #0f6466 */
+    --custom-form-color-hsl: 150 83% 96%; /* #ecfbf4 - Use HSL for consistency */
+    --custom-navbar-color-hsl: 158 6% 19%; /* #2c3532 */
+  }
+
+  /* Shadcn UI CSS Variables (Dark Mode) */
+  .dark {
+    --background: 222.2 84% 4.9%; /* Dark Gray/Black */
+    --foreground: 210 40% 98%; /* Almost White */
+
+    --card: 222.2 84% 4.9%; /* Dark Gray/Black */
+    --card-foreground: 210 40% 98%; /* Almost White */
+
+    --popover: 222.2 84% 4.9%; /* Dark Gray/Black */
+    --popover-foreground: 210 40% 98%; /* Almost White */
+
+    /* Primary (Dark Mode) */
+    /* Example: Lighter shade of your button color */
+    --primary: 181 60% 35%; /* Adjust lightness */
+    --primary-foreground: 210 40% 98%; /* Keep light text */
+
+    /* Secondary (Dark Mode) */
+    --secondary: 217.2 32.6% 17.5%; /* Dark Gray */
+    --secondary-foreground: 210 40% 98%; /* Almost White */
+
+    /* Muted (Dark Mode) */
+    --muted: 217.2 32.6% 17.5%; /* Dark Gray */
+    --muted-foreground: 215 20.2% 65.1%; /* Lighter Medium Gray */
+
+    /* Accent (Dark Mode) */
+    /* Example: Lighter shade of your navbar color */
+    --accent: 158 6% 30%; /* Adjust lightness */
+    --accent-foreground: 210 40% 98%; /* Keep light text */
+
+    /* Destructive (Dark Mode) */
+    --destructive: 0 62.8% 30.6%; /* Darker Red */
+    --destructive-foreground: 210 40% 98%; /* Light text */
+
+    /* Border */
+    --border: 217.2 32.6% 17.5%; /* Dark Gray Border */
+    /* Input */
+    --input: 217.2 32.6% 17.5%; /* Dark Gray Input Border */
+    /* Ring (Focus outlines - Dark Mode) */
+    /* Example: Lighter shade for focus */
+    --ring: 181 60% 40%;
+
+    /* Your Custom Variables (Dark Mode - Optional) */
+    /* Define dark versions if needed */
+    --custom-button-color: 181 60% 35%;
+    --custom-form-color-hsl: 158 10% 15%; /* Example dark form background */
+    --custom-navbar-color-hsl: 158 6% 15%; /* Example dark navbar */
+  }
+}
+
+/* Base Layer - Apply base styles AFTER variables are defined */
+@layer base {
+  * {
+    @apply border-border; /* Use Shadcn border variable */
+  }
+  body {
+    @apply bg-background text-foreground; /* Use Shadcn background/foreground */
+    /* Your custom base body styles */
+    font-family: Verdana, sans-serif; /* Keep your font */
+    font-weight: 200;
+    font-size: 15px;
+    line-height: 1.5;
+    @apply antialiased; /* Add antialiasing */
+  }
+
+  /* Your custom base heading styles */
+  h1 {
+    font-size: 36px;
+    padding: 36px 0;
+  } /* Adjusted padding */
+  h2 {
+    font-size: 30px;
+    padding: 30px 0;
+  }
+  h3 {
+    font-size: 24px;
+    padding: 24px 0;
+  }
+  h4 {
+    font-size: 20px;
+    padding: 20px 0;
+  }
+  h5 {
+    font-size: 18px;
+    padding: 18px 0;
+  }
+  h6 {
+    font-size: 16px;
+    padding: 16px 0;
+  }
+
+  /* Your custom base input styles - Merged with Shadcn approach */
+  input,
+  textarea,
+  select {
+    /* Apply to common form elements */
+    @apply text-foreground w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:border-input; /* Use Shadcn vars for focus */
+    /* Removed focus:border-color as ring provides better focus */
+  }
+}
+
+/* Components Layer - For custom component base styles (if needed beyond utilities) */
+@layer components {
+  /* Example: Styling your custom Navbar using Shadcn variables */
+  /* Note: If using Shadcn NavigationMenu, these might not be needed */
+  .custom-navbar {
+    background-color: hsl(var(--custom-navbar-color-hsl)); /* Use HSL version */
+    /* Add padding etc. */
+    @apply px-4 py-2;
+  }
+  .custom-navbar a {
+    color: hsl(var(--primary-foreground)); /* Example: Use primary text color */
+    @apply px-4 py-2 inline-block rounded-md transition-colors;
+  }
+  .custom-navbar a:hover {
+    background-color: hsl(var(--accent)); /* Example: Use accent for hover */
+    color: hsl(var(--accent-foreground));
+  }
+}
+
+/* Utilities Layer - Your custom utility classes */
+@layer utilities {
+  .screenMiddleDiv {
+    @apply flex items-center justify-center py-8 min-h-[calc(100vh-theme(space.14))]; /* Example: Adjust height based on navbar */
+  }
+  .formDiv {
+    @apply w-full max-w-md p-6 shadow-xl rounded-lg border; /* Added border */
+    /* Use Shadcn card background or your custom form color */
+    /* background-color: hsl(var(--card)); */
+    background-color: hsl(
+      var(--custom-form-color-hsl)
+    ); /* Using your custom HSL var */
+    border-color: hsl(var(--border));
+  }
+  .formLabel {
+    @apply block text-sm font-medium mb-1; /* Use text-foreground or adjust */
+    color: hsl(var(--foreground) / 0.9); /* Slightly muted foreground */
+  }
+  /* Style Shadcn Buttons directly or add specific classes */
+  /* .formButton class might conflict if you use <Button className="formButton"> */
+  /* Instead, use Shadcn Button variants or add specific utility classes */
+
+  /* Your custom tiny button */
+  .buttonTiny {
+    @apply m-1 p-1 text-xs rounded-sm transition-colors;
+    background-color: hsl(var(--custom-navbar-color-hsl)); /* Use HSL */
+    color: hsl(var(--primary-foreground)); /* Example text color */
+  }
+  .buttonTiny:hover {
+    background-color: hsl(var(--custom-button-color)); /* Use HSL */
+  }
+
+  /* Your custom back button */
+  /* Consider using Shadcn Button with variant="ghost" or "link" instead */
+  .buttonback {
+    @apply mb-5 inline-flex items-center text-sm font-medium px-3 py-1.5 rounded-md transition-colors;
+    background-color: hsl(var(--custom-navbar-color-hsl)); /* Use HSL */
+    color: hsl(var(--primary-foreground));
+  }
+  .buttonback:hover {
+    background-color: hsl(var(--custom-button-color)); /* Use HSL */
+  }
+}
