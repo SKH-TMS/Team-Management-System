@@ -1,4 +1,3 @@
-// src/app/projectManagerData/layout.tsx
 import NavbarUser from "../userData/NavbarUser/page";
 import SidebarProjectManager from "./SidebarProjectManager/page";
 import React from "react";
