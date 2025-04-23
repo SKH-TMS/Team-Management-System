@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import VerificationEmail from "@/emails/VerificationEmail";
-import VerificationUserEmail from "@/emails/VerificationEmail";
+import VerificationUserEmail from "@/emails/VerificationEmailUser";
 import PasswordResetEmail from "@/emails/PasswordResetEmail";
 import PasswordResetUserEmail from "@/emails/PasswordResetEmail";
 import * as React from "react";
