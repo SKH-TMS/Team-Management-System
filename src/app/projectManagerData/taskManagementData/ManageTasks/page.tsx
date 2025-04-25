@@ -18,8 +18,8 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  User,
-  Users,
+  User, // Keep User icon for Submitter display
+  Users, // Keep Users icon for Team display and Select Tasks button
   X,
   XCircle,
 } from "lucide-react";
@@ -52,42 +52,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+// Removed Tooltip imports as they were primarily for assignedTo avatars
 import { Label } from "@/components/ui/label";
+// Removed Avatar imports
 
+// Updated Task Interface: Removed assignedTo
 interface Task {
   TaskId: string;
   title: string;
   description: string;
-  assignedTo: string[];
+  // assignedTo: string[]; // Removed this line
   deadline: string;
   status: string;
   createdAt: string;
   updatedAt: string;
   gitHubUrl?: string;
   context?: string;
-  submittedby?: string;
-  // Flattened assignment details:
+  submittedby?: string; // This likely refers to the Team Leader submitting the overall task
+  // Flattened assignment details (from backend API):
   projectId: string;
   projectName: string;
   teamId: string;
   teamName: string;
 }
 
-interface Member {
+// Interface for submitter details (likely Team Leaders or designated submitters)
+interface Submitter {
   UserId: string;
   firstname: string;
   lastname: string;
-  profilepic: string;
+  profilepic: string; // Keep profile pic for submitter if needed
   email: string;
 }
 
+// UpdateConfirmDialogProps remains the same for now
 interface UpdateConfirmDialogProps {
   taskId: string;
   projectId: string;
@@ -103,10 +101,10 @@ export default function ManageTasksPage() {
   const [feedback, setfeedback] = useState("");
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [taskColour, settaskColour] = useState("");
-  const [members, setMembers] = useState<Member[]>([]);
+  // const [members, setMembers] = useState<Member[]>([]); // Removed members state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [submitters, setSubmitters] = useState<Member[]>([]);
+  const [submitters, setSubmitters] = useState<Submitter[]>([]); // Renamed Member -> Submitter for clarity
   const router = useRouter();
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedTaskDetails, setSelectedTaskDetails] = useState<Task | null>(
@@ -131,7 +129,10 @@ export default function ManageTasksPage() {
   });
 
   const fetchTasks = async () => {
+    setLoading(true); // Ensure loading state is true at the start
+    setError(""); // Clear previous errors
     try {
+      // API endpoint remains the same for now, backend needs update
       const response = await fetch(
         "/api/projectManagerData/taskManagementData/getTasks",
         { method: "GET" }
@@ -139,18 +140,21 @@ export default function ManageTasksPage() {
       const data = await response.json();
       if (data.success) {
         setTasks(data.tasks);
-        setMembers(data.members);
-        setSubmitters(data.submitters);
+        // setMembers(data.members); // Removed: No longer setting members
+        setSubmitters(data.submitters || []); // Set submitters, handle if API doesn't return it yet
       } else {
         setError(data.message || "Failed to fetch tasks.");
         toast.error(data.message || "Failed to fetch tasks.");
       }
     } catch (err) {
       console.error("Error fetching tasks:", err);
-      setError("Failed to fetch tasks. Please try again later.");
-      toast.error("Failed to fetch tasks. Please try again later.");
+      const errorMessage = "Failed to fetch tasks. Please try again later.";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      // Use finally to ensure loading is set to false regardless of success/error
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -174,13 +178,25 @@ export default function ManageTasksPage() {
     setfeedback("");
   };
 
+  // --- handleMarkPending, handleMarkCompleted ---
+  // These functions interact with APIs that operate on the Task status.
+  // The frontend logic here remains the same. The backend API needs to
+  // ensure it handles the task status correctly in the new model.
   const handleMarkPending = async () => {
     if (!selectedTaskDetails) return;
 
-    if (feedback === "") {
+    if (feedback.trim() === "") {
+      // Use trim() to check for empty or whitespace-only feedback
       toast.error("Please enter feedback");
       return;
     }
+
+    // Show confirmation dialog first
+    setShowMarkPendingConfirm(true);
+  };
+
+  const confirmMarkPending = async () => {
+    if (!selectedTaskDetails || feedback.trim() === "") return;
 
     try {
       const response = await fetch(
@@ -198,22 +214,22 @@ export default function ManageTasksPage() {
         setTasks((prevTasks) =>
           prevTasks.map((task) =>
             task.TaskId === selectedTaskDetails.TaskId
-              ? { ...task, status: "Pending" }
+              ? { ...task, status: "Re Assigned" } // Usually marking pending means Re Assigned
               : task
           )
         );
-        setSelectedTaskDetails(null);
-        setmarkpending(false);
-        setfeedback("");
-        setShowMarkPendingConfirm(false);
+        handleCloseModal(); // Close the main modal
+        setShowMarkPendingConfirm(false); // Close the confirmation dialog
       } else {
         toast.error(data.message || "Failed to mark task as pending.");
-        router.push("/projectManagerData/ProfileProjectManager");
+        // Consider if redirecting is always the best UX here
+        // router.push("/projectManagerData/ProfileProjectManager");
       }
     } catch (error) {
       console.error("Error marking task as pending:", error);
       toast.error("Failed to mark task as pending.");
-      router.push("/projectManagerData/ProfileProjectManager");
+      // Consider if redirecting is always the best UX here
+      // router.push("/projectManagerData/ProfileProjectManager");
     }
   };
 
@@ -239,7 +255,7 @@ export default function ManageTasksPage() {
               : task
           )
         );
-        setSelectedTaskDetails(null);
+        handleCloseModal(); // Close the modal on success
       } else {
         toast.error(data.message || "Failed to mark task as completed.");
       }
@@ -248,7 +264,10 @@ export default function ManageTasksPage() {
       toast.error("Failed to mark task as completed.");
     }
   };
+  // --- End handleMarkPending, handleMarkCompleted ---
 
+  // --- getStatusColor, getCardBgColor, getStatusIcon ---
+  // These helpers are based on task.status and remain unchanged.
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Pending":
@@ -284,7 +303,7 @@ export default function ManageTasksPage() {
       case "Pending":
         return <Clock className="h-4 w-4" />;
       case "In Progress":
-        return <Loader2 className="h-4 w-4" />;
+        return <Loader2 className="h-4 w-4 animate-spin" />; // Added animate-spin
       case "Completed":
         return <CheckCircle2 className="h-4 w-4" />;
       case "Re Assigned":
@@ -293,12 +312,17 @@ export default function ManageTasksPage() {
         return <Clock className="h-4 w-4" />;
     }
   };
+  // --- End Status Helpers ---
 
+  // --- handleUpdateTask, handleConfirmUpdate ---
+  // Logic for navigating to the update page remains the same.
+  // The update page itself (/updateTask/...) will need changes later.
   const handleUpdateTask = (
     taskId: string,
     status: string,
     projectId: string
   ) => {
+    // Keep the confirmation dialog logic as it warns about overriding progress
     if (status === "Completed" || status === "In Progress") {
       setUpdateConfirmDialog({
         isOpen: true,
@@ -307,6 +331,7 @@ export default function ManageTasksPage() {
         status,
       });
     } else {
+      // Navigate directly for Pending or Re Assigned tasks
       router.push(
         `/projectManagerData/taskManagementData/ManageTasks/updateTask/${projectId}/${taskId}`
       );
@@ -320,8 +345,17 @@ export default function ManageTasksPage() {
       `/projectManagerData/taskManagementData/ManageTasks/updateTask/${projectId}/${taskId}`
     );
   };
+  // --- End Update Task Logic ---
 
+  // --- handleDeleteSelectedTasks ---
+  // Frontend logic is okay. The backend API needs to be updated
+  // to also remove TaskIds from the AssignedProjectLog.
   const handleDeleteSelectedTasks = async () => {
+    if (selectedTaskIds.length === 0) return;
+    setShowDeleteConfirm(true); // Show confirmation dialog first
+  };
+
+  const confirmDeleteSelectedTasks = async () => {
     try {
       const response = await fetch(
         "/api/projectManagerData/taskManagementData/deleteSelectedTasks",
@@ -338,22 +372,28 @@ export default function ManageTasksPage() {
           prevTasks.filter((task) => !selectedTaskIds.includes(task.TaskId))
         );
         setSelectedTaskIds([]);
-        setShowDeleteConfirm(false);
+        setIsSelectMode(false); // Exit select mode after deletion
       } else {
         toast.error(data.message || "Failed to delete tasks.");
       }
     } catch (error) {
       toast.error("Failed to delete tasks. Please try again.");
+    } finally {
+      setShowDeleteConfirm(false); // Close confirmation dialog
     }
   };
+  // --- End Delete Task Logic ---
 
+  // --- Filtering and Sorting ---
+  // Logic remains the same, based on task properties.
   const filteredTasks = tasks.filter((task) => {
+    const lowerSearchQuery = searchQuery.toLowerCase();
     const matchesSearch =
       searchQuery === "" ||
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.teamName.toLowerCase().includes(searchQuery.toLowerCase());
+      task.title.toLowerCase().includes(lowerSearchQuery) ||
+      task.description.toLowerCase().includes(lowerSearchQuery) ||
+      task.projectName?.toLowerCase().includes(lowerSearchQuery) || // Added optional chaining
+      task.teamName?.toLowerCase().includes(lowerSearchQuery); // Added optional chaining
 
     const matchesStatus =
       statusFilter === "all" || task.status === statusFilter;
@@ -361,24 +401,26 @@ export default function ManageTasksPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const sortedTasks = filteredTasks.sort((a, b) => {
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    // Added [...filteredTasks] to avoid mutating the original filtered array
     const statusOrder: { [key: string]: number } = {
       "Re Assigned": 1,
       Pending: 2,
       "In Progress": 3,
       Completed: 4,
     };
-    return statusOrder[a.status] - statusOrder[b.status];
+    return (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5); // Added default value
   });
+  // --- End Filtering and Sorting ---
 
-  const handleMarkPendingstate = () => {
-    setShowMarkPendingConfirm(true);
-  };
-
+  // --- Selection Logic ---
+  // handleTaskClick, toggleTaskSelection, handleToggleSelectMode remain the same.
   const handleTaskClick = (taskId: string) => {
     if (isSelectMode) {
       toggleTaskSelection(taskId);
     }
+    // Optionally, you could navigate to a task detail view if not in select mode
+    // else { router.push(`/projectManagerData/taskManagementData/Tasks/${taskId}`); }
   };
 
   const toggleTaskSelection = (taskId: string) => {
@@ -391,24 +433,27 @@ export default function ManageTasksPage() {
 
   const handleToggleSelectMode = () => {
     if (isSelectMode) {
-      setSelectedTaskIds([]);
-      setIsSelectMode(false);
-    } else {
-      setIsSelectMode(true);
+      setSelectedTaskIds([]); // Clear selection when exiting select mode
     }
+    setIsSelectMode(!isSelectMode);
   };
+  // --- End Selection Logic ---
 
+  // --- Navigation ---
+  // handleCreateTask navigates to the create page. This page will need updates.
   const handleCreateTask = () => {
     router.push("/projectManagerData/taskManagementData/CreateTask");
   };
+  // --- End Navigation ---
 
-  const getInitials = (firstname: string, lastname: string) => {
-    return `${firstname.charAt(0)}${lastname.charAt(0)}`.toUpperCase();
-  };
+  // Removed getInitials function
 
+  // --- Loading and Error States ---
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh]">
+      <div className="flex flex-col items-center justify-center min-h-[70vh]">
+        {" "}
+        {/* Use min-h for better layout */}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-4 text-muted-foreground">Loading tasks...</p>
       </div>
@@ -430,13 +475,26 @@ export default function ManageTasksPage() {
       </div>
     );
   }
+  // --- End Loading and Error States ---
 
+  // --- Main Render ---
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-4 sm:p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold mb-4 md:mb-0">Manage All Tasks</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-center md:text-left">
+          Manage All Tasks
+        </h1>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-grow md:flex-grow-0">
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tasks, projects, teams..."
+              className="pl-8 w-full md:w-[200px] lg:w-[300px]" // Responsive width
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <Button
             variant="outline"
             size="icon"
@@ -453,53 +511,49 @@ export default function ManageTasksPage() {
               <LayoutGrid className="h-4 w-4" />
             )}
           </Button>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tasks..."
-              className="pl-8 w-[200px] md:w-[300px]"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        <Button onClick={handleCreateTask}>
-          <PlusCircle className="h-4 w-4" />
+      {/* Action Buttons & Filters */}
+      <div className="flex flex-wrap gap-2 mb-6 items-center">
+        <Button onClick={handleCreateTask} size="sm">
+          <PlusCircle className="mr-2 h-4 w-4" />
           Create Task
         </Button>
         <Button
-          variant={isSelectMode ? "destructive" : "default"}
+          variant={isSelectMode ? "secondary" : "outline"} // Adjusted variant
+          size="sm"
           onClick={handleToggleSelectMode}
         >
           {isSelectMode ? (
             <>
               <X className="mr-2 h-4 w-4" />
-              Cancel Selection
+              Cancel
             </>
           ) : (
             <>
               <Users className="mr-2 h-4 w-4" />
-              Select Tasks
+              Select
             </>
           )}
         </Button>
 
-        {selectedTaskIds.length > 0 && (
+        {isSelectMode && selectedTaskIds.length > 0 && (
           <Button
             variant="destructive"
-            onClick={() => setShowDeleteConfirm(true)}
+            size="sm"
+            onClick={handleDeleteSelectedTasks} // Changed to show confirm dialog first
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected ({selectedTaskIds.length})
+            Delete ({selectedTaskIds.length})
           </Button>
         )}
 
         <div className="ml-auto">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px] text-sm">
+              {" "}
+              {/* Responsive width & size */}
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -513,13 +567,15 @@ export default function ManageTasksPage() {
         </div>
       </div>
 
+      {/* Task Count & Clear Filters */}
       <div className="mb-4 text-sm text-muted-foreground">
-        Showing {sortedTasks.length} of {tasks.length} tasks
+        Showing {sortedTasks.length} task{sortedTasks.length !== 1 ? "s" : ""}
+        {tasks.length !== sortedTasks.length && ` of ${tasks.length}`}
         {(searchQuery || statusFilter !== "all") && (
           <Button
-            variant="ghost"
+            variant="link" // Use link variant for less emphasis
             size="sm"
-            className="ml-2"
+            className="ml-2 h-auto p-0 text-primary" // Adjust styling
             onClick={() => {
               setSearchQuery("");
               setStatusFilter("all");
@@ -530,14 +586,15 @@ export default function ManageTasksPage() {
         )}
       </div>
 
+      {/* Task List/Grid */}
       {sortedTasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-card">
           <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium">No tasks found</h3>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-2 max-w-xs">
             {searchQuery || statusFilter !== "all"
-              ? "Try adjusting your search or filters"
-              : "Create your first task to get started"}
+              ? "Try adjusting your search or filters."
+              : "No tasks match the current criteria, or no tasks have been created yet."}
           </p>
           {(searchQuery || statusFilter !== "all") && (
             <Button
@@ -553,352 +610,251 @@ export default function ManageTasksPage() {
           )}
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        // --- Grid View ---
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          {" "}
+          {/* Added xl breakpoint */}
           {sortedTasks.map((task) => (
             <Card
               key={task.TaskId}
-              className={`overflow-hidden transition-all duration-300 hover:shadow-lg group relative hover:-translate-y-1 ${getCardBgColor(task.status)} ${
+              className={`overflow-hidden transition-all duration-200 hover:shadow-lg group relative ${getCardBgColor(task.status)} ${
                 selectedTaskIds.includes(task.TaskId)
-                  ? "ring-2 ring-primary"
-                  : ""
-              }`}
+                  ? "ring-2 ring-primary shadow-lg" // Enhanced selected style
+                  : "hover:-translate-y-1" // Apply hover effect only if not selected
+              } ${isSelectMode ? "cursor-pointer" : ""}`} // Add pointer cursor in select mode
               onClick={() => handleTaskClick(task.TaskId)}
             >
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-xl line-clamp-1">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start gap-2">
+                  <CardTitle className="text-lg line-clamp-2 break-words">
+                    {" "}
+                    {/* Allow wrapping */}
                     {task.title}
                   </CardTitle>
                   <Badge
                     variant="outline"
-                    className={`flex items-center gap-1 ${getStatusColor(task.status)}`}
+                    className={`flex-shrink-0 text-xs px-1.5 py-0.5 ${getStatusColor(task.status)}`} // Smaller badge
                   >
                     {getStatusIcon(task.status)}
-                    {task.status}
+                    <span className="ml-1 hidden sm:inline">
+                      {task.status}
+                    </span>{" "}
+                    {/* Hide text on very small screens */}
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="pb-2">
-                <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+              <CardContent className="pb-3 text-sm space-y-2">
+                <p className="text-muted-foreground line-clamp-3 mb-3">
                   {task.description}
                 </p>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <ClipboardList className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Project</p>
-                      <p className="text-muted-foreground">
-                        {task.projectName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Team</p>
-                      <p className="text-muted-foreground">{task.teamName}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Deadline</p>
-                      <p className="text-muted-foreground">
-                        {new Date(task.deadline).toLocaleString("en-US", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <p className="text-muted-foreground truncate">
+                    <span className="font-medium text-card-foreground">
+                      Project:{" "}
+                    </span>
+                    {task.projectName || "N/A"}
+                  </p>
                 </div>
 
-                <Separator className="my-3" />
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <p className="text-muted-foreground truncate">
+                    <span className="font-medium text-card-foreground">
+                      Team:{" "}
+                    </span>
+                    {task.teamName || "N/A"}
+                  </p>
+                </div>
 
-                <div>
-                  <p className="font-medium text-sm mb-2">Assigned To:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {task.assignedTo.map((userId) => {
-                      const member = members.find((m) => m.UserId === userId);
-                      return member ? (
-                        <TooltipProvider key={userId}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Avatar className="h-8 w-8">
-                                {member.profilepic ? (
-                                  <AvatarImage
-                                    src={
-                                      member.profilepic || "/placeholder.svg"
-                                    }
-                                    alt={`${member.firstname} ${member.lastname}`}
-                                  />
-                                ) : null}
-                                <AvatarFallback>
-                                  {getInitials(
-                                    member.firstname,
-                                    member.lastname
-                                  )}
-                                </AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {member.firstname} {member.lastname}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {member.email}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <Avatar key={userId} className="h-8 w-8">
-                          <AvatarFallback>?</AvatarFallback>
-                        </Avatar>
-                      );
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-card-foreground">
+                      Due:{" "}
+                    </span>
+                    {new Date(task.deadline).toLocaleDateString("en-US", {
+                      // Simplified date format for grid
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
                     })}
-                  </div>
+                  </p>
                 </div>
+
+                {/* REMOVED Assigned To Section */}
               </CardContent>
-              <CardFooter className="pt-0">
+              <Separator className="my-2" />
+              <CardFooter className="pt-2 pb-3 flex justify-end items-center gap-2">
+                {/* Action Buttons - Conditionally shown */}
                 {(task.status === "In Progress" ||
                   task.status === "Completed") && (
-                  <div className="w-full">
-                    <Button
-                      variant="link"
-                      className="p-0 h-auto text-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewExplanationClick(
-                          task,
-                          task.status === "In Progress"
-                            ? "bg-blue-50"
-                            : "bg-green-50"
-                        );
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="w-4 h-4 mr-1.5"
-                      >
-                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                      View Implementation
-                    </Button>
-
-                    <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity ">
-                      <Button
-                        size="sm"
-                        className="hover:text-slate-700 bg-transparent text-black hover:bg-transparent hover:border hover:border-indigo-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpdateTask(
-                            task.TaskId,
-                            task.status,
-                            task.projectId
-                          );
-                        }}
-                      >
-                        <FileEdit className="mr-2 h-4 w-4" />
-                        Update
-                      </Button>
-                    </div>
-                  </div>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="p-0 h-auto text-primary text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent card click
+                      handleViewExplanationClick(
+                        task,
+                        getCardBgColor(task.status)
+                      );
+                    }}
+                  >
+                    View Details
+                  </Button>
                 )}
-
-                {(task.status === "Pending" ||
-                  task.status === "Re Assigned") && (
-                  <div className="w-full opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      size="sm"
-                      className="hover:text-slate-700 bg-transparent text-black hover:bg-transparent hover:border hover:border-indigo-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUpdateTask(
-                          task.TaskId,
-                          task.status,
-                          task.projectId
-                        );
-                      }}
-                    >
-                      <FileEdit className="mr-2 h-4 w-4" />
-                      Update
-                    </Button>
-                  </div>
+                {/* Update button always visible on hover/focus when not in select mode */}
+                {!isSelectMode && (
+                  <Button
+                    size="icon" // Use icon button for smaller footprint
+                    variant="ghost"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent card click
+                      handleUpdateTask(
+                        task.TaskId,
+                        task.status,
+                        task.projectId
+                      );
+                    }}
+                    aria-label="Update Task"
+                  >
+                    <FileEdit className="h-4 w-4" />
+                  </Button>
                 )}
               </CardFooter>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
+        // --- List View ---
+        <div className="space-y-3">
           {sortedTasks.map((task) => (
             <div
               key={task.TaskId}
-              className={`flex flex-col md:flex-row gap-4 p-4 rounded-lg border group hover:shadow-md transition-all ${getCardBgColor(task.status)} ${
+              className={`flex flex-col md:flex-row gap-4 p-4 rounded-lg border group transition-all ${getCardBgColor(task.status)} ${
                 selectedTaskIds.includes(task.TaskId)
-                  ? "ring-2 ring-primary"
-                  : ""
-              }`}
+                  ? "ring-2 ring-primary shadow-md" // Enhanced selected style
+                  : "hover:shadow-md"
+              } ${isSelectMode ? "cursor-pointer" : ""}`} // Add pointer cursor in select mode
               onClick={() => handleTaskClick(task.TaskId)}
             >
+              {/* Main Content Area */}
               <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <h3 className="text-lg font-medium">{task.title}</h3>
+                <div className="flex justify-between items-start gap-2 mb-1">
+                  <h3 className="text-lg font-medium break-words">
+                    {task.title}
+                  </h3>
                   <Badge
                     variant="outline"
-                    className={`flex items-center gap-1 ${getStatusColor(task.status)}`}
+                    className={`flex items-center gap-1 text-xs px-2 py-0.5 flex-shrink-0 ${getStatusColor(task.status)}`}
                   >
                     {getStatusIcon(task.status)}
-                    {task.status}
+                    <span className="ml-1">{task.status}</span>
                   </Badge>
                 </div>
 
-                <p className="text-sm text-muted-foreground mt-1 mb-3">
+                <p className="text-sm text-muted-foreground mt-1 mb-3 line-clamp-2">
                   {task.description}
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="flex items-start gap-2">
-                    <ClipboardList className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Project</p>
-                      <p className="text-muted-foreground">
-                        {task.projectName}
-                      </p>
-                    </div>
+                {/* Details Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm mb-3">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <p className="text-muted-foreground truncate">
+                      <span className="font-medium text-card-foreground">
+                        Project:{" "}
+                      </span>
+                      {task.projectName || "N/A"}
+                    </p>
                   </div>
-
-                  <div className="flex items-start gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Team</p>
-                      <p className="text-muted-foreground">{task.teamName}</p>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <p className="text-muted-foreground truncate">
+                      <span className="font-medium text-card-foreground">
+                        Team:{" "}
+                      </span>
+                      {task.teamName || "N/A"}
+                    </p>
                   </div>
-
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Deadline</p>
-                      <p className="text-muted-foreground">
-                        {new Date(task.deadline).toLocaleString("en-US", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="font-medium text-sm mb-2">Assigned To:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {task.assignedTo.map((userId) => {
-                      const member = members.find((m) => m.UserId === userId);
-                      return member ? (
-                        <TooltipProvider key={userId}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Avatar className="h-8 w-8">
-                                {member.profilepic ? (
-                                  <AvatarImage
-                                    src={
-                                      member.profilepic || "/placeholder.svg"
-                                    }
-                                    alt={`${member.firstname} ${member.lastname}`}
-                                  />
-                                ) : null}
-                                <AvatarFallback>
-                                  {getInitials(
-                                    member.firstname,
-                                    member.lastname
-                                  )}
-                                </AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {member.firstname} {member.lastname}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {member.email}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <Avatar key={userId} className="h-8 w-8">
-                          <AvatarFallback>?</AvatarFallback>
-                        </Avatar>
-                      );
-                    })}
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-card-foreground">
+                        Due:{" "}
+                      </span>
+                      {new Date(task.deadline).toLocaleString("en-US", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
                   </div>
                 </div>
+
+                {/* REMOVED Assigned To Section */}
               </div>
 
-              <div className="flex md:flex-col justify-end items-end gap-2 mt-4 md:mt-0">
+              {/* Action Buttons Area */}
+              <div className="flex flex-row md:flex-col justify-end items-center md:items-end gap-2 flex-shrink-0 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-border/50 md:pl-4">
                 {(task.status === "In Progress" ||
                   task.status === "Completed") && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewExplanationClick(
-                          task,
-                          task.status === "In Progress"
-                            ? "bg-blue-50"
-                            : "bg-green-50"
-                        );
-                      }}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full md:w-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewExplanationClick(
+                        task,
+                        getCardBgColor(task.status)
+                      );
+                    }}
+                  >
+                    <svg /* Eye Icon */
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-4 h-4 mr-1.5"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="w-4 h-4 mr-1.5"
-                      >
-                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                      View Implementation
-                    </Button>
-                  </>
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Details
+                  </Button>
                 )}
-
-                <Button
-                  size="sm"
-                  className="hover:text-slate-700 bg-transparent text-black hover:bg-transparent hover:border hover:border-indigo-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUpdateTask(task.TaskId, task.status, task.projectId);
-                  }}
-                >
-                  <FileEdit className="mr-2 h-4 w-4" />
-                  Update
-                </Button>
+                {!isSelectMode && (
+                  <Button
+                    size="sm"
+                    variant="ghost" // Use ghost for less emphasis until hover
+                    className="w-full md:w-auto hover:bg-accent hover:text-accent-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpdateTask(
+                        task.TaskId,
+                        task.status,
+                        task.projectId
+                      );
+                    }}
+                  >
+                    <FileEdit className="mr-2 h-4 w-4" />
+                    Update
+                  </Button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* --- Dialogs --- */}
+      {/* View Implementation/Details Dialog */}
       <Dialog
         open={!!selectedTaskDetails}
         onOpenChange={(open) => !open && handleCloseModal()}
@@ -907,162 +863,177 @@ export default function ManageTasksPage() {
           <DialogHeader>
             <DialogTitle className="text-xl">
               {selectedTaskDetails?.status === "Completed"
-                ? "Completed Task"
-                : "Task Implementation"}
+                ? "Completed Task Details"
+                : "Task Progress Details"}
             </DialogTitle>
             <DialogDescription>
-              Review the implementation details for this task.
+              Review the implementation details submitted for this task.
             </DialogDescription>
           </DialogHeader>
 
           {selectedTaskDetails && (
-            <>
+            <div className="space-y-4 py-4">
               {/* Submitter Info */}
               <div className="space-y-1">
-                <Label className="flex items-center text-sm font-medium">
+                <Label className="flex items-center text-sm font-medium text-muted-foreground">
                   <User className="w-4 h-4 mr-1.5" />
-                  Submitted By
+                  Submitted By (Team Lead/Rep)
                 </Label>
-                <div className="text-sm text-muted-foreground">
-                  {selectedTaskDetails.submittedby
+                <p className="text-sm">
+                  {selectedTaskDetails.submittedby &&
+                  selectedTaskDetails.submittedby !== "Not-submitted"
                     ? (() => {
                         const submitter = submitters.find(
                           (s) => s.UserId === selectedTaskDetails.submittedby
                         );
                         return submitter
                           ? `${submitter.firstname} ${submitter.lastname} (${submitter.email})`
-                          : selectedTaskDetails.submittedby;
+                          : `User ID: ${selectedTaskDetails.submittedby}`; // Fallback
                       })()
                     : "Not submitted yet"}
-                </div>
+                </p>
               </div>
 
               <Separator />
 
               {/* GitHub URL */}
               <div className="space-y-1">
-                <Label className="flex items-center text-sm font-medium">
+                <Label
+                  htmlFor="github-url"
+                  className="flex items-center text-sm font-medium text-muted-foreground"
+                >
                   <Github className="w-4 h-4 mr-1.5" />
                   GitHub URL
                 </Label>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    value={selectedTaskDetails.gitHubUrl || ""}
-                    readOnly
-                    className="font-mono text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      copyToClipboard(selectedTaskDetails.gitHubUrl || "")
-                    }
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
+                {selectedTaskDetails.gitHubUrl ? (
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="github-url"
+                      value={selectedTaskDetails.gitHubUrl}
+                      readOnly
+                      className="font-mono text-sm flex-1"
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() =>
+                        copyToClipboard(selectedTaskDetails.gitHubUrl || "")
+                      }
+                      aria-label="Copy GitHub URL"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No GitHub URL provided.
+                  </p>
+                )}
               </div>
 
-              {markpending ? (
-                <div className="space-y-1">
-                  <Label className="flex items-center text-sm font-medium">
-                    <AlertTriangle className="w-4 h-4 mr-1.5 text-amber-500" />
-                    Feedback for Rejection
+              {/* Context/Explanation */}
+              <div className="space-y-1">
+                <Label
+                  htmlFor="context"
+                  className="flex items-center text-sm font-medium text-muted-foreground"
+                >
+                  Implementation Notes / Context
+                </Label>
+                <Textarea
+                  id="context"
+                  value={
+                    selectedTaskDetails.context || "No explanation provided."
+                  }
+                  readOnly
+                  className="min-h-[100px] bg-muted/50 text-sm" // Slightly different bg
+                />
+              </div>
+
+              {/* Feedback Area (Only shown when marking pending) */}
+              {markpending && (
+                <div className="space-y-1 pt-2 border-t">
+                  <Label
+                    htmlFor="feedback"
+                    className="flex items-center text-sm font-medium text-destructive"
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-1.5" />
+                    Feedback for Rejection (Required)
                   </Label>
                   <Textarea
+                    id="feedback"
                     value={feedback}
                     onChange={(e) => setfeedback(e.target.value)}
-                    placeholder="Please provide feedback on why this task is being marked as pending..."
-                    className="min-h-[120px]"
+                    placeholder="Provide clear reasons for marking this task as pending..."
+                    className="min-h-[100px]"
+                    required
                   />
                   {feedback.trim() === "" && (
-                    <p className="text-xs text-red-500">Feedback is required</p>
+                    <p className="text-xs text-red-600">Feedback is required</p>
                   )}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <Label className="flex items-center text-sm font-medium">
-                    Implementation Details
-                  </Label>
-                  <Textarea
-                    value={
-                      selectedTaskDetails.context || "No explanation provided"
-                    }
-                    readOnly
-                    className="min-h-[120px]"
-                  />
                 </div>
               )}
 
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                {selectedTaskDetails.status === "In Progress" && (
-                  <>
-                    {markpending ? (
-                      <Button
-                        variant="destructive"
-                        onClick={handleMarkPending}
-                        disabled={feedback.trim() === ""}
-                      >
-                        <AlertTriangle className="w-4 h-4 mr-2" />
-                        Confirm Rejection
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="destructive"
-                          onClick={handleMarkPendingstate}
-                        >
-                          <AlertTriangle className="w-4 h-4 mr-2" />
-                          Mark as Pending
-                        </Button>
-                        <Button variant="default" onClick={handleMarkCompleted}>
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          Mark as Completed
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {selectedTaskDetails.status === "Completed" && (
-                  <>
-                    {markpending ? (
-                      <Button
-                        variant="destructive"
-                        onClick={handleMarkPending}
-                        disabled={feedback.trim() === ""}
-                      >
-                        <AlertTriangle className="w-4 h-4 mr-2" />
-                        Confirm Rejection
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="destructive"
-                        onClick={handleMarkPendingstate}
-                      >
-                        <AlertTriangle className="w-4 h-4 mr-2" />
-                        Mark as Pending
-                      </Button>
-                    )}
-                  </>
-                )}
-
+              <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-4">
                 <Button variant="outline" onClick={handleCloseModal}>
                   Close
                 </Button>
+
+                {/* Conditional Actions based on Status and markpending state */}
+                {selectedTaskDetails.status === "In Progress" &&
+                  !markpending && (
+                    <>
+                      <Button
+                        variant="destructive"
+                        onClick={() => setmarkpending(true)} // Show feedback area
+                      >
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Mark Pending
+                      </Button>
+                      <Button variant="default" onClick={handleMarkCompleted}>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Mark Completed
+                      </Button>
+                    </>
+                  )}
+
+                {selectedTaskDetails.status === "Completed" && !markpending && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setmarkpending(true)} // Show feedback area
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    Mark Pending
+                  </Button>
+                )}
+
+                {markpending && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleMarkPending} // Trigger confirmation dialog
+                    disabled={feedback.trim() === ""}
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    Confirm Rejection
+                  </Button>
+                )}
               </DialogFooter>
-            </>
+            </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogTitle className="flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2 text-destructive" />
+              Confirm Deletion
+            </DialogTitle>
             <DialogDescription>
               Are you sure you want to delete {selectedTaskIds.length} selected
-              task(s)? This action cannot be undone.
+              task(s)? This action cannot be undone and will remove the task(s)
+              from the project assignment log.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1072,13 +1043,18 @@ export default function ManageTasksPage() {
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteSelectedTasks}>
-              Delete Tasks
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteSelectedTasks} // Call the actual delete function
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Task(s)
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Mark Pending Confirmation Dialog */}
       <Dialog
         open={showMarkPendingConfirm}
         onOpenChange={setShowMarkPendingConfirm}
@@ -1090,22 +1066,25 @@ export default function ManageTasksPage() {
               Confirm Mark as Pending
             </DialogTitle>
             <DialogDescription>
-              This will mark the task as pending and notify the team member.
-              This action will result in deletion of the submission data.
+              This will mark the task as 'Re Assigned' and clear any previous
+              submission data (GitHub URL, context). The team will be notified.
+              Please provide feedback.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1">
-            <Label className="flex items-center text-sm font-medium">
+          <div className="space-y-1 py-4">
+            <Label htmlFor="confirm-feedback" className="font-medium">
               Feedback (Required)
             </Label>
             <Textarea
-              value={feedback}
-              onChange={(e) => setfeedback(e.target.value)}
-              placeholder="Please provide feedback on why this task is being marked as pending..."
-              className="min-h-[120px]"
+              id="confirm-feedback"
+              value={feedback} // Should already have feedback from the main modal state
+              onChange={(e) => setfeedback(e.target.value)} // Allow editing here too
+              placeholder="Provide clear reasons..."
+              className="min-h-[100px]"
+              required
             />
             {feedback.trim() === "" && (
-              <p className="text-xs text-red-500">Feedback is required</p>
+              <p className="text-xs text-red-600">Feedback is required</p>
             )}
           </div>
           <DialogFooter>
@@ -1117,15 +1096,16 @@ export default function ManageTasksPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={handleMarkPending}
+              onClick={confirmMarkPending} // Call the actual mark pending function
               disabled={feedback.trim() === ""}
             >
-              Confirm
+              Confirm Mark Pending
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Update Confirmation Dialog */}
       <Dialog
         open={updateConfirmDialog.isOpen}
         onOpenChange={(open) =>
@@ -1140,9 +1120,9 @@ export default function ManageTasksPage() {
               Confirm Task Update
             </DialogTitle>
             <DialogDescription>
-              {updateConfirmDialog.status === "Completed"
-                ? "This task has already been completed. Updating it will override the current implementation."
-                : "This task has already been performed by the user. Updating it will override the current implementation."}
+              This task is currently '{updateConfirmDialog.status}'. Updating it
+              may require the team to redo work or adjust their progress. Are
+              you sure you want to proceed?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

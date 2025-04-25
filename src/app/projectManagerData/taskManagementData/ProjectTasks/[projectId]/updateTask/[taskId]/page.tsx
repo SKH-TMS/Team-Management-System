@@ -13,13 +13,14 @@ import {
   ClipboardEdit,
   Calendar,
   Clock,
-  Users,
+  // Users, // Removed
   FileText,
   Github,
   MessageSquare,
   AlertCircle,
+  Info, // Added
+  User, // Added for submitter display
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -55,71 +56,74 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Skeleton } from "@/components/ui/skeleton"; // Added Skeleton
+import { ITask } from "@/models/Task"; // Import updated ITask interface
+import { Label } from "@/components/ui/label";
 
-interface Member {
-  UserId: string;
-  firstname: string;
-  lastname: string;
-  profilepic: string;
-  email: string;
-}
+// Removed Member interface if not needed elsewhere
 
-interface Task {
-  TaskId: string;
-  title: string;
-  description: string;
-  assignedTo: string[];
-  deadline: string;
-  status: string;
-  gitHubUrl?: string;
-  context?: string;
-  submittedby?: string;
-}
-
+// --- CHANGE 1: Simplify Zod Schema ---
 const formSchema = z.object({
-  title: z.string().min(3, {
+  title: z.string().trim().min(3, {
     message: "Task title must be at least 3 characters.",
   }),
-  description: z.string().min(10, {
+  description: z.string().trim().min(10, {
     message: "Task description must be at least 10 characters.",
   }),
-  assignedTo: z.string().optional(),
+  // assignedTo: z.string().optional(), // Removed
   deadlineDate: z.string().min(1, {
     message: "Please select a deadline date.",
   }),
   hour: z.string(),
   minute: z.string(),
   ampm: z.string(),
-  gitHubUrl: z.string().optional(),
-  context: z.string().optional(),
+  // gitHubUrl: z.string().optional(), // Removed
+  // context: z.string().optional(), // Removed
 });
 
-export default function UpdateTaskPage() {
-  const { projectId, taskId } = useParams();
+export default function UpdateSpecificTaskPage() {
+  // Renamed component
+  const params = useParams();
+  const projectId = params.projectId as string;
+  const taskId = params.taskId as string;
   const router = useRouter();
-  const [membersData, setMembersData] = useState<Member[]>([]);
-  const [task, setTask] = useState<Task | null>(null);
+
+  // const [membersData, setMembersData] = useState<Member[]>([]); // Removed
+  const [task, setTask] = useState<ITask | null>(null); // Use ITask type
+  const [submitterName, setSubmitterName] = useState<string | null>(null); // State for submitter name
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // --- CHANGE 2: Simplify useForm default values ---
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      assignedTo: "",
+      // assignedTo: "", // Removed
       deadlineDate: "",
-      hour: "12",
+      hour: "17", // Default 5 PM
       minute: "00",
-      ampm: "AM",
-      gitHubUrl: "",
-      context: "",
+      ampm: "PM",
+      // gitHubUrl: "", // Removed
+      // context: "", // Removed
     },
   });
 
-  function convertUTCtoLocalParts(utcDate: string) {
+  // Helper function (remains the same)
+  function convertUTCtoLocalParts(utcDate: string | Date) {
+    // Accept Date object too
     const date = new Date(utcDate);
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date passed to convertUTCtoLocalParts:", utcDate);
+      return {
+        formattedDate: "",
+        hourFormatted: "12",
+        minuteFormatted: "00",
+        ampm: "AM",
+      };
+    }
 
     const formattedDate = date.toISOString().split("T")[0];
     const hour = date.getHours();
@@ -127,80 +131,103 @@ export default function UpdateTaskPage() {
     const ampm = hour >= 12 ? "PM" : "AM";
     const hour12 = hour % 12 || 12;
 
-    const hourFormatted = hour12 < 10 ? `0${hour12}` : `${hour12}`;
-    const minuteFormatted = minute < 10 ? `0${minute}` : `${minute}`;
+    const hourFormatted = String(hour12).padStart(2, "0");
+    const minuteFormatted = String(minute).padStart(2, "0");
 
-    return {
-      formattedDate,
-      hourFormatted,
-      minuteFormatted,
-      ampm,
-    };
+    return { formattedDate, hourFormatted, minuteFormatted, ampm };
   }
 
+  // --- CHANGE 3: Update Fetch Logic ---
   useEffect(() => {
-    const fetchTask = async () => {
+    if (!taskId || !projectId) {
+      setError("Task ID or Project ID missing.");
+      setLoading(false);
+      return;
+    }
+
+    const fetchTaskAndSubmitter = async () => {
       setLoading(true);
+      setError("");
       try {
-        const response = await fetch(
+        // Fetch task details (API already updated not to send members)
+        const taskRes = await fetch(
           `/api/projectManagerData/taskManagementData/getTaskDetails/${taskId}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId }),
+            body: JSON.stringify({ projectId }), // Send projectId for verification
           }
         );
-        const data = await response.json();
+        const taskData = await taskRes.json();
 
-        if (data.success) {
-          setMembersData(data.members);
-          setTask(data.task);
-
-          const { formattedDate, hourFormatted, minuteFormatted, ampm } =
-            convertUTCtoLocalParts(data.task.deadline);
-
-          form.reset({
-            title: data.task.title,
-            description: data.task.description,
-            assignedTo: data.task.assignedTo[0] || "",
-            deadlineDate: formattedDate,
-            hour: hourFormatted,
-            minute: minuteFormatted,
-            ampm: ampm,
-            gitHubUrl: data.task.gitHubUrl || "",
-            context: data.task.context || "",
-          });
-        } else {
-          setError(data.message || "Failed to fetch task details.");
-          toast.error(data.message || "Failed to fetch task details.");
-          router.back();
+        if (!taskRes.ok || !taskData.success) {
+          throw new Error(taskData.message || "Failed to fetch task details.");
         }
-      } catch (err) {
+
+        const fetchedTask: ITask = taskData.task;
+        setTask(fetchedTask);
+
+        // Reset form with fetched data
+        const { formattedDate, hourFormatted, minuteFormatted, ampm } =
+          convertUTCtoLocalParts(fetchedTask.deadline);
+
+        form.reset({
+          title: fetchedTask.title,
+          description: fetchedTask.description,
+          deadlineDate: formattedDate,
+          hour: hourFormatted,
+          minute: minuteFormatted,
+          ampm: ampm,
+          // No assignedTo, gitHubUrl, context in form reset
+        });
+
+        // Fetch submitter details if submittedby exists
+        if (
+          fetchedTask.submittedby &&
+          fetchedTask.submittedby !== "Not-submitted"
+        ) {
+          try {
+            const submitterRes = await fetch(
+              `/api/getUserDetails/${fetchedTask.submittedby}`
+            ); // Assuming an endpoint exists
+            const submitterData = await submitterRes.json();
+            if (submitterData.success && submitterData.user) {
+              setSubmitterName(
+                `${submitterData.user.firstname} ${submitterData.user.lastname}`
+              );
+            } else {
+              setSubmitterName(`User ID: ${fetchedTask.submittedby}`); // Fallback
+            }
+          } catch (submitterError) {
+            console.error("Failed to fetch submitter details:", submitterError);
+            setSubmitterName(`User ID: ${fetchedTask.submittedby}`); // Fallback
+          }
+        } else {
+          setSubmitterName(null);
+        }
+      } catch (err: any) {
         console.error("Error fetching task:", err);
-        setError("Failed to fetch task details. Please try again later.");
-        toast.error("Failed to fetch task details. Please try again later.");
-        router.back();
+        setError(err.message || "Failed to load task details.");
+        toast.error(err.message || "Failed to load task details.");
+        // Consider redirecting only on critical errors
+        // router.back();
       } finally {
         setLoading(false);
       }
     };
 
-    if (taskId) {
-      fetchTask();
-    }
-  }, [taskId, projectId, form, router]);
+    fetchTaskAndSubmitter();
+  }, [taskId, projectId, form]); // Removed router dependency
 
+  // Helper function (remains the same)
   const getFormattedTime = (hour: string, minute: string, ampm: string) => {
     let hourNum = Number.parseInt(hour);
-    if (ampm === "PM" && hourNum !== 12) {
-      hourNum += 12;
-    }
-    if (ampm === "AM" && hourNum === 12) {
-      hourNum = 0;
-    }
-    return `${hourNum.toString().padStart(2, "0")}:${minute}:00`;
+    if (ampm === "PM" && hourNum !== 12) hourNum += 12;
+    if (ampm === "AM" && hourNum === 12) hourNum = 0;
+    return `${String(hourNum).padStart(2, "0")}:${minute}:00`;
   };
 
+  // --- CHANGE 4: Update onSubmit Logic ---
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setSubmitting(true);
     setError("");
@@ -221,43 +248,44 @@ export default function UpdateTaskPage() {
         return;
       }
 
+      // Use the updated API endpoint and payload
       const response = await fetch(
         "/api/projectManagerData/taskManagementData/updateTask",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            taskId: taskId,
+            taskId: taskId, // Ensure taskId is sent
             title: values.title,
             description: values.description,
-            assignedTo: values.assignedTo ? [values.assignedTo] : [],
             deadline: combinedDeadline.toISOString(),
-            gitHubUrl: values.gitHubUrl,
-            context: values.context,
+            // REMOVED: assignedTo, gitHubUrl, context
           }),
         }
       );
 
       const data = await response.json();
 
-      if (data.success) {
-        toast.success("Task updated successfully!");
-        router.back();
-      } else {
-        setError(data.message || "Failed to update task.");
-        toast.error(data.message || "Failed to update task.");
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to update task.");
       }
-    } catch (err) {
+
+      toast.success("Task updated successfully!");
+      router.back(); // Go back after successful update
+    } catch (err: any) {
       console.error("Error updating task:", err);
-      setError("Failed to update task. Please try again.");
-      toast.error("Failed to update task. Please try again.");
+      setError(err.message || "Failed to update task.");
+      toast.error(err.message || "Failed to update task.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  // --- Render Logic ---
+
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">
+      {/* Breadcrumbs (remains the same) */}
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -270,61 +298,70 @@ export default function UpdateTaskPage() {
             <BreadcrumbLink
               href={`/projectManagerData/taskManagementData/ProjectTasks/${projectId}`}
             >
-              Tasks
+              Project Tasks
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbLink>Update Task</BreadcrumbLink>
+            {/* Use BreadcrumbPage for the current page */}
+            <span className="text-foreground">Update Task</span>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card className="max-w-3xl mx-auto">
+        {" "}
+        {/* Increased max-width */}
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl">
             <ClipboardEdit className="h-5 w-5" />
             Update Task
           </CardTitle>
           <CardDescription>
-            Make changes to your task details here.
+            Modify the core details of the task. Submission details and
+            assignments are handled separately.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
+          {/* Loading State */}
+          {loading && (
+            <div className="space-y-6 py-8">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && !loading && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
+              <AlertTitle>Error Loading Task</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Loading task details...</p>
-            </div>
-          ) : (
+          {/* Form Display (only when not loading and no error) */}
+          {!loading && !error && task && (
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-6"
               >
+                {/* Core Task Fields */}
                 <FormField
                   control={form.control}
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2">
+                      <FormLabel className="flex items-center gap-2 font-medium">
                         <FileText className="h-4 w-4" />
-                        Task Title
+                        Task Title*
                       </FormLabel>
                       <FormControl>
                         <Input placeholder="Enter task title" {...field} />
                       </FormControl>
-                      <FormDescription>
-                        Give your task a clear and descriptive title.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -335,9 +372,9 @@ export default function UpdateTaskPage() {
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2">
+                      <FormLabel className="flex items-center gap-2 font-medium">
                         <FileText className="h-4 w-4" />
-                        Task Description
+                        Task Description*
                       </FormLabel>
                       <FormControl>
                         <Textarea
@@ -346,66 +383,41 @@ export default function UpdateTaskPage() {
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        Provide a detailed description of what needs to be done.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="assignedTo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Assign To
-                      </FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team member" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="all">All Members</SelectItem>
-                          {membersData.map((member) => (
-                            <SelectItem
-                              key={member.UserId}
-                              value={member.UserId}
-                            >
-                              {member.firstname} {member.lastname} -{" "}
-                              {member.email}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Select a team member to assign this task to.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* --- CHANGE 5: Remove AssignedTo FormField --- */}
+                {/* <FormField ... name="assignedTo" ... /> */}
 
-                <div className="space-y-4">
+                {/* Info Alert */}
+                <Alert
+                  variant="default"
+                  className="bg-blue-50 border-blue-200 text-blue-800"
+                >
+                  <Info className="h-4 w-4 !text-blue-800" />
+                  <AlertTitle className="font-medium">
+                    Team Assignment
+                  </AlertTitle>
+                  <AlertDescription className="text-xs">
+                    This task is assigned at the team level. Subtask assignments
+                    are managed by the Team Leader.
+                  </AlertDescription>
+                </Alert>
+
+                {/* Deadline Fields */}
+                <div className="space-y-4 pt-4 border-t">
                   <h3 className="text-sm font-medium flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Deadline
+                    <Calendar className="h-4 w-4 text-primary" />
+                    Deadline*
                   </h3>
-
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-start">
                     <FormField
                       control={form.control}
                       name="deadlineDate"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="sm:col-span-2">
                           <FormLabel>Date</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} />
@@ -414,36 +426,27 @@ export default function UpdateTaskPage() {
                         </FormItem>
                       )}
                     />
-
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2 sm:col-span-2">
                       <FormField
                         control={form.control}
                         name="hour"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              Hour
-                            </FormLabel>
+                            <FormLabel>Hour</FormLabel>
                             <Select
                               onValueChange={field.onChange}
-                              defaultValue={field.value}
                               value={field.value}
                             >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Hour" />
+                                  <SelectValue placeholder="HH" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {Array.from(
-                                  { length: 12 },
-                                  (_, i) => i + 1
+                                {Array.from({ length: 12 }, (_, i) =>
+                                  String(i + 1).padStart(2, "0")
                                 ).map((h) => (
-                                  <SelectItem
-                                    key={h}
-                                    value={h.toString().padStart(2, "0")}
-                                  >
+                                  <SelectItem key={`h-${h}`} value={h}>
                                     {h}
                                   </SelectItem>
                                 ))}
@@ -453,26 +456,24 @@ export default function UpdateTaskPage() {
                           </FormItem>
                         )}
                       />
-
                       <FormField
                         control={form.control}
                         name="minute"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Minute</FormLabel>
+                            <FormLabel>Min</FormLabel>
                             <Select
                               onValueChange={field.onChange}
-                              defaultValue={field.value}
                               value={field.value}
                             >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Minute" />
+                                  <SelectValue placeholder="MM" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
                                 {["00", "15", "30", "45"].map((m) => (
-                                  <SelectItem key={m} value={m}>
+                                  <SelectItem key={`m-${m}`} value={m}>
                                     {m}
                                   </SelectItem>
                                 ))}
@@ -482,7 +483,6 @@ export default function UpdateTaskPage() {
                           </FormItem>
                         )}
                       />
-
                       <FormField
                         control={form.control}
                         name="ampm"
@@ -491,7 +491,6 @@ export default function UpdateTaskPage() {
                             <FormLabel>AM/PM</FormLabel>
                             <Select
                               onValueChange={field.onChange}
-                              defaultValue={field.value}
                               value={field.value}
                             >
                               <FormControl>
@@ -512,104 +511,100 @@ export default function UpdateTaskPage() {
                   </div>
                 </div>
 
-                {task?.submittedby && task.submittedby !== "Not-submitted" && (
-                  <>
-                    <Separator />
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-medium">
-                        Submission Details
-                      </h3>
+                {/* --- CHANGE 6: Display Submission/Feedback Info Read-Only --- */}
+                {(task.submittedby && task.submittedby !== "Not-submitted") ||
+                task.status === "Completed" ||
+                task.status === "Re Assigned" ? (
+                  <div className="pt-4 border-t space-y-4">
+                    <h3 className="text-sm font-medium text-muted-foreground">
+                      {task.status === "Re Assigned"
+                        ? "Previous Submission / Feedback"
+                        : "Submission Details"}{" "}
+                      (Read-Only)
+                    </h3>
 
-                      <FormField
-                        control={form.control}
-                        name="gitHubUrl"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              <Github className="h-4 w-4" />
-                              GitHub URL
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="GitHub repository URL"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    {/* Submitter Info */}
+                    <div className="space-y-1">
+                      <Label className="flex items-center text-xs font-medium">
+                        <User className="w-4 h-4 mr-1.5" />
+                        Submitted By
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {submitterName ||
+                          (task.submittedby === "Not-submitted"
+                            ? "N/A"
+                            : `User ID: ${task.submittedby}`)}
+                      </p>
+                    </div>
 
-                      <FormField
-                        control={form.control}
-                        name="context"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              Explanation
-                            </FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Task explanation"
-                                className="min-h-[100px]"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                    {/* GitHub URL */}
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="readOnlyGitHubUrl"
+                        className="flex items-center text-xs font-medium"
+                      >
+                        <Github className="h-4 w-4 mr-1.5" />
+                        GitHub URL
+                      </Label>
+                      <Input
+                        id="readOnlyGitHubUrl"
+                        value={task.gitHubUrl || "N/A"}
+                        readOnly
+                        className="bg-muted/50 text-sm"
                       />
                     </div>
-                  </>
-                )}
 
-                {task?.status === "Re Assigned" && (
-                  <>
-                    <Separator />
-                    <FormField
-                      control={form.control}
-                      name="context"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            Feedback
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Provide feedback"
-                              className="min-h-[100px]"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
+                    {/* Context / Feedback */}
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="readOnlyContext"
+                        className="flex items-center text-xs font-medium"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1.5" />
+                        {task.status === "Re Assigned"
+                          ? "Feedback Provided"
+                          : "Explanation/Context"}
+                      </Label>
+                      <Textarea
+                        id="readOnlyContext"
+                        value={
+                          task.context ||
+                          (task.status === "Re Assigned"
+                            ? "No feedback recorded."
+                            : "No explanation provided.")
+                        }
+                        readOnly
+                        rows={3}
+                        className={`bg-muted/50 text-sm ${task.status === "Re Assigned" ? "border-amber-300" : ""}`}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {/* --- End Read-Only Section --- */}
 
-                <div className="flex justify-end space-x-4">
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 pt-4 border-t">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => router.back()}
                     disabled={submitting}
                   >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting}>
+                  <Button
+                    type="submit"
+                    disabled={submitting || loading || !form.formState.isDirty}
+                  >
                     {submitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Updating...
+                        Saving...
                       </>
                     ) : (
                       <>
                         <Save className="mr-2 h-4 w-4" />
-                        Update Task
+                        Save Changes
                       </>
                     )}
                   </Button>

@@ -2,98 +2,170 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import AssignedProjectLog from "@/models/AssignedProjectLogs";
-import Task from "@/models/Task";
-import Project from "@/models/Project";
-import Team from "@/models/Team";
-import User from "@/models/User"; // Added missing import
+import AssignedProjectLog, {
+  IAssignedProjectLog,
+} from "@/models/AssignedProjectLogs";
+import Task, { ITask } from "@/models/Task"; // Ensure ITask reflects the *current* model (ideally without assignedTo)
+import Project, { IProject } from "@/models/Project";
+import Team, { ITeam } from "@/models/Team";
+import User, { IUser } from "@/models/User";
 import { getToken, GetUserType, GetUserId } from "@/utils/token";
+
+// Define a type for the task object we will return to the frontend
+// If your ITask interface *still* has assignedTo (e.g., for compatibility), Omit is needed.
+// If ITask is updated and *doesn't* have assignedTo, you can remove Omit.
+// Assuming ITask might still have it for now:
+type FrontendTask = Omit<ITask, "assignedTo"> & {
+  projectId: string;
+  projectName: string;
+  teamId: string;
+  teamName: string;
+};
+
+// Define a type for the submitter object
+type SubmitterInfo = Pick<
+  IUser,
+  "UserId" | "firstname" | "lastname" | "email" | "profilepic"
+>;
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify token and that the user is a ProjectManager.
+    // 1. Authentication and Authorization (same as before)
     const token = await getToken(req);
     if (!token) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized. No token provided." },
+        { success: false, message: "Unauthorized: No token provided." },
         { status: 401 }
       );
     }
     const userType = await GetUserType(token);
     if (userType !== "ProjectManager") {
       return NextResponse.json(
-        { success: false, message: "You are not a ProjectManager." },
-        { status: 401 }
+        {
+          success: false,
+          message: "Forbidden: User is not a Project Manager.",
+        },
+        { status: 403 }
       );
     }
     const userId = await GetUserId(token);
     if (!userId) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized. User ID not found." },
+        {
+          success: false,
+          message: "Unauthorized: User ID not found in token.",
+        },
         { status: 401 }
       );
     }
 
     await connectToDatabase();
 
-    // Get all assignment logs created by this project manager.
-    const logs = await AssignedProjectLog.find({ assignedBy: userId });
+    // 2. Find Assignment Logs (same as before)
+    const logs: IAssignedProjectLog[] = await AssignedProjectLog.find({
+      assignedBy: userId,
+    });
 
-    // For each log, retrieve the referenced tasks along with the assignment details.
-    const tasksWithAssignment = await Promise.all(
-      logs.map(async (log) => {
-        // Look up the project and team to get their names.
-        const project = await Project.findOne({ ProjectId: log.projectId });
-        const team = await Team.findOne({ teamId: log.teamId });
-        // Fetch tasks referenced in this log.
-        const tasksInLog = await Task.find({ TaskId: { $in: log.tasksIds } });
-        // For each task, merge assignment details.
-        return tasksInLog.map((task) => ({
-          ...task.toObject(),
+    if (!logs || logs.length === 0) {
+      return NextResponse.json({
+        success: true,
+        tasks: [],
+        submitters: [],
+        message: "No projects assigned by this manager found.",
+      });
+    }
+
+    // 3. Process logs (same as before)
+    const tasksWithAssignmentDetails: FrontendTask[] = [];
+    const submitterUserIdsSet = new Set<string>();
+
+    for (const log of logs) {
+      const project: IProject | null = await Project.findOne({
+        ProjectId: log.projectId,
+      });
+      const team: ITeam | null = await Team.findOne({ teamId: log.teamId });
+      const projectName = project ? project.title : "Unknown Project";
+      const teamName = team ? team.teamName : "Unknown Team";
+
+      if (!log.tasksIds || log.tasksIds.length === 0) {
+        continue;
+      }
+
+      const tasksInLog: ITask[] = await Task.find({
+        TaskId: { $in: log.tasksIds },
+      });
+
+      for (const task of tasksInLog) {
+        const taskObject = task.toObject(); // Get plain object
+
+        // Add submitter ID if valid
+        if (
+          taskObject.submittedby &&
+          taskObject.submittedby !== "Not-submitted"
+        ) {
+          // Ensure submittedby is treated as string if it exists
+          submitterUserIdsSet.add(String(taskObject.submittedby));
+        }
+
+        // --- FIX START ---
+        // Create the base object by spreading and adding new properties
+        const combinedTaskData = {
+          ...taskObject,
           projectId: log.projectId,
-          projectName: project ? project.title : "",
+          projectName: projectName,
           teamId: log.teamId,
-          teamName: team ? team.teamName : "",
-        }));
-      })
-    );
+          teamName: teamName,
+        };
 
-    // Flatten the results (since tasksWithAssignment is an array of arrays).
-    const flattenedTasks = tasksWithAssignment.flat();
+        // Explicitly delete the 'assignedTo' property IF it exists on the combined object
+        // This handles cases where taskObject might still have it from old data
+        // Use 'as any' because TS doesn't know about dynamic deletion easily
+        if ("assignedTo" in combinedTaskData) {
+          delete (combinedTaskData as any).assignedTo;
+        }
 
-    // Compute assigned user IDs from the flattened tasks.
-    const assignedUserIds = Array.from(
-      new Set(flattenedTasks.flatMap((task: any) => task.assignedTo))
-    );
-    let members: any[] = [];
-    if (assignedUserIds.length > 0) {
-      members = await User.find({ UserId: { $in: assignedUserIds } });
+        // Now, the combinedTaskData object should match the FrontendTask structure
+        // We can assert the type here for clarity or let TS infer if confident
+        tasksWithAssignmentDetails.push(combinedTaskData as FrontendTask);
+        // --- FIX END ---
+      }
     }
 
-    // Gather unique submittedby user IDs from tasks.
-    const submittedUserIds = Array.from(
-      new Set(
-        flattenedTasks
-          .map((task: any) => task.submittedby)
-          .filter((id: string) => id && id !== "Not-submitted")
-      )
-    );
-    let submitters: any[] = [];
+    // 4. Fetch Submitter Details (same as before)
+    const submittedUserIds = Array.from(submitterUserIdsSet);
+    let submitters: SubmitterInfo[] = [];
     if (submittedUserIds.length > 0) {
-      submitters = await User.find({ UserId: { $in: submittedUserIds } });
+      const submitterDocs: IUser[] = await User.find({
+        UserId: { $in: submittedUserIds },
+      }).select("UserId firstname lastname email profilepic");
+
+      submitters = submitterDocs.map((doc) => ({
+        UserId: doc.UserId,
+        firstname: doc.firstname,
+        lastname: doc.lastname,
+        email: doc.email,
+        profilepic: doc.profilepic,
+      }));
     }
 
+    // 5. Return Response (same as before)
     return NextResponse.json({
       success: true,
-      tasks: flattenedTasks,
-      // Optionally, you may return members and submitters:
-      members,
-      submitters,
+      tasks: tasksWithAssignmentDetails,
+      submitters: submitters,
     });
   } catch (error) {
     console.error("Error fetching tasks:", error);
+    let message = "An error occurred while fetching tasks.";
+    // Basic check if it's an error object
+    if (typeof error === "object" && error !== null && "message" in error) {
+      // Check if message is string before assigning
+      if (typeof error.message === "string") {
+        message = error.message;
+      }
+    }
     return NextResponse.json(
-      { success: false, message: "Failed to fetch tasks." },
+      { success: false, message: "An error occurred while fetching tasks." }, // Keep generic message for client
       { status: 500 }
     );
   }
