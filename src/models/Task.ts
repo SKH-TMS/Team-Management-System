@@ -10,21 +10,21 @@ export interface ITask extends Document {
   createdAt: Date;
   updatedAt: Date;
   subTasks?: string[];
-  // gitHubUrl?: string;
-  // context?: string;
+  gitHubUrl?: string;
+  context?: string;
   submittedby?: string;
 }
 
 const taskSchema = new Schema<ITask>(
   {
-    // gitHubUrl: {
-    //   type: String,
-    //   match: [
-    //     /^(https?:\/\/)?(www\.)?github\.com\/[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_.-]+)?\/?$/,
-    //     "Please enter a valid GitHub repository URL",
-    //   ],
-    // },
-    // context: { type: String },
+    gitHubUrl: {
+      type: String,
+      match: [
+        /^(https?:\/\/)?(www\.)?github\.com\/[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_.-]+)?\/?$/,
+        "Please enter a valid GitHub repository URL",
+      ],
+    },
+    context: { type: String },
     submittedby: { type: String, default: "Not-submitted" },
     TaskId: { type: String, unique: true },
     title: {
