@@ -4,26 +4,27 @@ export interface ITask extends Document {
   TaskId: string;
   title: string;
   description: string;
-  assignedTo: string[];
+  // assignedTo: string[];
   deadline: Date;
   status: string; // E.g., "Pending", "In Progress", "Completed"
   createdAt: Date;
   updatedAt: Date;
-  gitHubUrl?: string;
-  context?: string;
+  subTasks?: string[];
+  // gitHubUrl?: string;
+  // context?: string;
   submittedby?: string;
 }
 
 const taskSchema = new Schema<ITask>(
   {
-    gitHubUrl: {
-      type: String,
-      match: [
-        /^(https?:\/\/)?(www\.)?github\.com\/[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_.-]+)?\/?$/,
-        "Please enter a valid GitHub repository URL",
-      ],
-    },
-    context: { type: String },
+    // gitHubUrl: {
+    //   type: String,
+    //   match: [
+    //     /^(https?:\/\/)?(www\.)?github\.com\/[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_.-]+)?\/?$/,
+    //     "Please enter a valid GitHub repository URL",
+    //   ],
+    // },
+    // context: { type: String },
     submittedby: { type: String, default: "Not-submitted" },
     TaskId: { type: String, unique: true },
     title: {
@@ -34,16 +35,20 @@ const taskSchema = new Schema<ITask>(
       type: String,
       required: [true, "Task description is required"],
     },
-    assignedTo: {
-      type: [String],
-      required: [true, "Assigned user ID is required"],
-    },
+    // assignedTo: {
+    //   type: [String],
+    //   required: [true, "Assigned user ID is required"],
+    // },
     status: {
       type: String,
       enum: ["Pending", "In Progress", "Completed", "Re Assigned"],
       default: "Pending",
     },
     deadline: { type: Date, required: [true, "Due date is required"] },
+    subTasks: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

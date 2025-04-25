@@ -47,83 +47,83 @@ export async function POST(req: Request) {
         message: "Invalid email or password.",
       });
     }
-    if (!user.isVerified) {
-      console.log(`Login attempt by unverified user: ${user.email}`);
+    // if (!user.isVerified) {
+    //   console.log(`Login attempt by unverified user: ${user.email}`);
 
-      const now = new Date();
-      if (
-        !user.verificationToken ||
-        !user.verificationTokenExpires ||
-        user.verificationTokenExpires <= now
-      ) {
-        console.log(
-          `Verification token expired or missing for ${user.email}. Generating new one.`
-        );
-        const { rawToken, hashedToken, expiryDate } =
-          generateVerificationToken();
-        user.verificationToken = hashedToken;
-        user.verificationTokenExpires = expiryDate;
-        await user.save();
+    //   const now = new Date();
+    //   if (
+    //     !user.verificationToken ||
+    //     !user.verificationTokenExpires ||
+    //     user.verificationTokenExpires <= now
+    //   ) {
+    //     console.log(
+    //       `Verification token expired or missing for ${user.email}. Generating new one.`
+    //     );
+    //     const { rawToken, hashedToken, expiryDate } =
+    //       generateVerificationToken();
+    //     user.verificationToken = hashedToken;
+    //     user.verificationTokenExpires = expiryDate;
+    //     await user.save();
 
-        try {
-          if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
-            const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/userData/verify-email?token=${rawToken}`;
-            await sendUserVerificationEmail({
-              recipientName: user.firstname,
-              recipientEmail: user.email,
-              verificationUrl: verificationUrl,
-            });
-            console.log(`New verification email sent to ${user.email}.`);
-            return NextResponse.json(
-              {
-                success: false,
-                message:
-                  "Your email is not verified. A new verification link has been sent to your email address. Please check your inbox (and spam folder).",
-                action: "resent_verification",
-              },
-              { status: 403 }
-            );
-          } else {
-            console.error(
-              "Cannot resend verification email: Email service not configured."
-            );
+    //     try {
+    //       if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
+    //         const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/userData/verify-email?token=${rawToken}`;
+    //         await sendUserVerificationEmail({
+    //           recipientName: user.firstname,
+    //           recipientEmail: user.email,
+    //           verificationUrl: verificationUrl,
+    //         });
+    //         console.log(`New verification email sent to ${user.email}.`);
+    //         return NextResponse.json(
+    //           {
+    //             success: false,
+    //             message:
+    //               "Your email is not verified. A new verification link has been sent to your email address. Please check your inbox (and spam folder).",
+    //             action: "resent_verification",
+    //           },
+    //           { status: 403 }
+    //         );
+    //       } else {
+    //         console.error(
+    //           "Cannot resend verification email: Email service not configured."
+    //         );
 
-            return NextResponse.json(
-              {
-                success: false,
-                message:
-                  "Your email is not verified, and the verification link may have expired. Please contact support.",
-              },
-              { status: 403 }
-            );
-          }
-        } catch (emailError) {
-          console.error(
-            `Failed to resend verification email to ${user.email}:`,
-            emailError
-          );
+    //         return NextResponse.json(
+    //           {
+    //             success: false,
+    //             message:
+    //               "Your email is not verified, and the verification link may have expired. Please contact support.",
+    //           },
+    //           { status: 403 }
+    //         );
+    //       }
+    //     } catch (emailError) {
+    //       console.error(
+    //         `Failed to resend verification email to ${user.email}:`,
+    //         emailError
+    //       );
 
-          return NextResponse.json(
-            {
-              success: false,
-              message:
-                "Your email is not verified. There was an issue resending the verification link. Please try again later or contact support.",
-            },
-            { status: 403 }
-          );
-        }
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Your email address is not verified. Please check your inbox (and spam folder) for the verification link.",
-            action: "needs_verification",
-          },
-          { status: 403 }
-        );
-      }
-    }
+    //       return NextResponse.json(
+    //         {
+    //           success: false,
+    //           message:
+    //             "Your email is not verified. There was an issue resending the verification link. Please try again later or contact support.",
+    //         },
+    //         { status: 403 }
+    //       );
+    //     }
+    //   } else {
+    //     return NextResponse.json(
+    //       {
+    //         success: false,
+    //         message:
+    //           "Your email address is not verified. Please check your inbox (and spam folder) for the verification link.",
+    //         action: "needs_verification",
+    //       },
+    //       { status: 403 }
+    //     );
+    //   }
+    // }
     const profilepic = user.profilepic
       ? user.profilepic
       : "/default-profile.png";

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { rawToken, hashedToken, expiryDate } = generateVerificationToken();
+    // const { rawToken, hashedToken, expiryDate } = generateVerificationToken();
     const newAdmin = new Admin({
       firstname,
       lastname,
@@ -44,44 +44,43 @@ export async function POST(req: NextRequest) {
       contact: contact || "",
       profilepic: "/default-profile.png",
       userType: "Admin",
-      verificationToken: hashedToken,
-      verificationTokenExpires: expiryDate,
+      // verificationToken: hashedToken,
+      // verificationTokenExpires: expiryDate,
     });
 
     await newAdmin.save();
     console.log(
       `Admin ${newAdmin.email} created with ID ${newAdmin.id}, awaiting verification.`
     );
-    if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
-      try {
-        const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/adminData/verify-email?token=${rawToken}`; // Use RAW token in link
+    // if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
+    //   try {
+    //     const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/adminData/verify-email?token=${rawToken}`; // Use RAW token in link
 
-        await sendAdminVerificationEmail({
-          recipientName: newAdmin.firstname + "-- Email:" + newAdmin.email,
-          // recipientEmail: newAdmin.email,
-          recipientEmail: "k.s.h.taskmanagement@gmail.com",
-          verificationUrl: verificationUrl,
-        });
-        console.log(
-          `Verification email sending initiated for ${newAdmin.email}.`
-        );
-      } catch (emailError) {
-        console.error(
-          `Failed to send verification email to ${newAdmin.email} after registration:`,
-          emailError
-        );
-      }
-    } else {
-      console.warn(
-        `Skipping verification email for ${newAdmin.email} due to missing configuration.`
-      );
-    }
+    //     await sendAdminVerificationEmail({
+    //       recipientName: newAdmin.firstname + "-- Email:" + newAdmin.email,
+    //       // recipientEmail: newAdmin.email,
+    //       recipientEmail: "k.s.h.taskmanagement@gmail.com",
+    //       verificationUrl: verificationUrl,
+    //     });
+    //     console.log(
+    //       `Verification email sending initiated for ${newAdmin.email}.`
+    //     );
+    //   } catch (emailError) {
+    //     console.error(
+    //       `Failed to send verification email to ${newAdmin.email} after registration:`,
+    //       emailError
+    //     );
+    //   }
+    // } else {
+    //   console.warn(
+    //     `Skipping verification email for ${newAdmin.email} due to missing configuration.`
+    //   );
+    // }
 
     return NextResponse.json(
       {
         success: true,
-        message:
-          "Admin registration successful! Please ask support to check their email to verify your account.",
+        message: "Admin registration successful! .",
       },
       { status: 201 }
     );

@@ -76,10 +76,10 @@ export default function RegisterUser() {
         toast.success(
           result.message || "Registration successful! Check email."
         );
-
-        router.push(
-          `/userData/VerificationEmailSent?email=${encodeURIComponent(values.email.toLowerCase().trim())}`
-        );
+        router.push("/userData/LoginUser");
+        // router.push(
+        //   `/userData/VerificationEmailSent?email=${encodeURIComponent(values.email.toLowerCase().trim())}`
+        // );
       } else {
         const errorMessage = result.message || "Registration failed.";
         setApiError(errorMessage);
