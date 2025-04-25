@@ -60,7 +60,7 @@ export async function POST(
     // 3. Parse and Validate Request Body (same as before)
     const body = await req.json();
     const validationResult = CreateTaskBodySchema.safeParse(body);
-
+    console.log(body);
     if (!validationResult.success) {
       const errorMessages = validationResult.error.errors
         .map((err) => err.message)

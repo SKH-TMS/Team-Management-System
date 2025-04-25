@@ -1,52 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react"; // Added useCallback
 import { useParams, useRouter } from "next/navigation";
-import toast from "react-hot-toast";
-import {
-  Copy,
-  Check,
-  X,
-  Clock,
-  PlusCircle,
-  Trash2,
-  AlertCircle,
-  FileEdit,
-  Users,
-  Loader2,
-  Info,
-  Search,
-  RefreshCw,
-  CheckCircle,
-  AlertTriangle,
-  Github,
-  XCircle,
-  CheckSquare,
-  GithubIcon,
-} from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { toast } from "react-hot-toast";
+import { format } from "date-fns";
 
+// Import necessary components and icons
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-
 import {
   Select,
   SelectContent,
@@ -55,479 +19,455 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"; // Import Card components
+import { Badge } from "@/components/ui/badge"; // Import Badge
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { Label } from "@/components/ui/label";
+} from "@/components/ui/tooltip"; // Import Tooltip
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar
+import {
+  AlertCircle,
+  Briefcase,
+  LayoutGrid,
+  LayoutList,
+  Search,
+  Filter,
+  X,
+  Loader2,
+  GitBranch, // Using GitBranch for subtasks icon
+  Send,
+  Eye,
+  Github,
+  Copy,
+  User,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  RefreshCw,
+  MessageSquare,
+  Info,
+} from "lucide-react";
+import { cn } from "@/lib/utils"; // Import cn
 
-interface Task {
-  TaskId: string;
-  title: string;
-  description: string;
-  assignedTo: string[];
-  deadline: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  gitHubUrl?: string;
-  context?: string;
-  submittedby?: string;
+// --- CHANGE: Corrected import path assumption ---
+import type { Task, Member } from "./types"; // Assuming types.ts is in the same directory
+
+// --- Placeholder Task Card Component (Extract Later) ---
+interface TaskCardTeamLeadProps {
+  task: Task;
+  onOpenSubmitDialog: (task: Task) => void;
+  onNavigateToSubtasks: (taskId: string) => void;
+  onViewCompletedTask: (task: Task) => void;
 }
 
-interface Member {
-  UserId: string;
-  firstname: string;
-  lastname: string;
-  profilepic: string;
-  email: string;
-}
+function TaskCardTeamLead({
+  task,
+  onOpenSubmitDialog,
+  onNavigateToSubtasks,
+  onViewCompletedTask,
+}: TaskCardTeamLeadProps) {
+  const getStatusBadge = () => {
+    switch (task.status) {
+      case "In Progress":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5"
+          >
+            <Clock className="w-3 h-3 mr-1" />
+            In Progress
+          </Badge>
+        );
+      case "Completed":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5"
+          >
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Completed
+          </Badge>
+        );
+      case "Pending":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-gray-100 text-gray-800 text-xs px-1.5 py-0.5"
+          >
+            <Clock className="w-3 h-3 mr-1" />
+            Pending
+          </Badge>
+        );
+      case "Re Assigned":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-amber-100 text-amber-800 text-xs px-1.5 py-0.5"
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            Re Assigned
+          </Badge>
+        );
+      default:
+        return <Badge className="text-xs px-1.5 py-0.5">{task.status}</Badge>;
+    }
+  };
 
-export default function ProjectTasksPage() {
-  const { projectId } = useParams();
-  const [markpending, setmarkpending] = useState(false);
+  const getBgColor = () => {
+    switch (task.status) {
+      case "In Progress":
+        return "bg-blue-50 border-blue-200";
+      case "Completed":
+        return "bg-green-50 border-green-200";
+      case "Pending":
+        return "bg-gray-50 border-gray-200";
+      case "Re Assigned":
+        return "bg-amber-50 border-amber-200";
+      default:
+        return "bg-card border";
+    }
+  };
+
+  return (
+    <Card
+      className={cn(
+        "overflow-hidden transition-all duration-200 group relative border hover:shadow-md",
+        getBgColor()
+      )}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-base sm:text-lg font-medium line-clamp-2 break-words">
+            {task.title}
+          </CardTitle>
+          <div className="flex-shrink-0">{getStatusBadge()}</div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2 pb-3 text-sm">
+        <p className="text-muted-foreground line-clamp-3">{task.description}</p>
+        <div className="flex items-center text-xs text-muted-foreground pt-1">
+          <Calendar className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+          <span className="truncate">
+            Due: {format(new Date(task.deadline), "PPp")}
+          </span>
+        </div>
+      </CardContent>
+      <CardFooter className="pt-2 pb-3 flex justify-end items-center gap-2">
+        {/* Conditional Buttons for Team Leader */}
+        {task.status === "Completed" ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            onClick={() => onViewCompletedTask(task)}
+          >
+            <Eye className="w-3.5 h-3.5 mr-1" /> View Submission
+          </Button>
+        ) : (
+          <>
+            {(task.status === "Pending" || task.status === "Re Assigned") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => onNavigateToSubtasks(task.TaskId)}
+              >
+                <GitBranch className="w-3.5 h-3.5 mr-1" /> Manage Subtasks
+              </Button>
+            )}
+            <Button
+              variant="default"
+              size="sm"
+              className="text-xs"
+              onClick={() => onOpenSubmitDialog(task)}
+            >
+              <Send className="w-3.5 h-3.5 mr-1" />{" "}
+              {task.status === "In Progress" ? "Re-Submit" : "Submit Task"}
+            </Button>
+          </>
+        )}
+      </CardFooter>
+    </Card>
+  );
+}
+// --- End Placeholder Task Card ---
+
+export default function TeamLeadProjectTasksPage() {
+  const params = useParams();
+  const projectId = params.projectId as string;
+  const router = useRouter();
+
+  // State
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [ProjectTitle, setProjectTitle] = useState();
-  const [feedback, setfeedback] = useState("");
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
-  const [taskColour, settaskColour] = useState("");
-  const [members, setMembers] = useState<Member[]>([]);
+  const [projectTitle, setProjectTitle] = useState<string>("");
   const [submitters, setSubmitters] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
   const [currentUser, setCurrentUser] = useState<{ UserId: string } | null>(
     null
   );
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [gitHubUrl, setGitHubUrl] = useState("");
-  const [explanation, setExplanation] = useState("");
-  const [reassignedTask, setReassignedTask] = useState<Task | null>(null);
-  const [selectionMode, setSelectionMode] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const router = useRouter();
-  const [selectedTaskDetails, setSelectedTaskDetails] = useState<Task | null>(
-    null
-  );
+  // UI State
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // State for Modals/Dialogs
+  const [submitTaskData, setSubmitTaskData] = useState<Task | null>(null);
+  const [submissionUrl, setSubmissionUrl] = useState("");
+  const [submissionContext, setSubmissionContext] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewCompletedTaskData, setViewCompletedTaskData] =
+    useState<Task | null>(null);
+
+  // Fetch Project Tasks for Team Leader
+  const fetchTeamLeadProjectTasks = useCallback(async () => {
+    // Wrap in useCallback
+    if (!projectId) {
+      setError("Project ID is missing.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/teamData/teamLeaderData/getProjectTasks/${projectId}`,
+        { method: "GET" }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Failed to fetch project tasks for your team."
+        );
+      }
+      setTasks(data.tasks || []);
+      setProjectTitle(data.title || "Project Tasks");
+      setSubmitters(data.submitters || []);
+      setCurrentUser(data.currentUser || null);
+    } catch (err: any) {
+      console.error("Error fetching team project tasks:", err);
+      const message = err.message || "Failed to fetch project tasks.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]); // Add projectId as dependency
 
   useEffect(() => {
-    const fetchProjectTasks = async () => {
-      try {
-        const response = await fetch(
-          `/api/teamData/teamLeaderData/getProjectTasks/${projectId}`,
-          { method: "GET" }
-        );
-        const data = await response.json();
-        if (data.success) {
-          setTasks(data.tasks);
-          setMembers(data.members);
-          setProjectTitle(data.title);
-          setSubmitters(data.submitters);
-          setCurrentUser(data.currentUser || { UserId: "unknown" });
-        } else {
-          setError(data.message || "Failed to fetch tasks.");
-          toast.error(data.message || "Failed to fetch tasks.");
-        }
-      } catch (err) {
-        console.error("Error fetching project tasks:", err);
-        setError("Failed to fetch project tasks. Please try again later.");
-        toast.error("Failed to fetch project tasks. Please try again later.");
-      }
-      setLoading(false);
-    };
+    fetchTeamLeadProjectTasks();
+  }, [fetchTeamLeadProjectTasks]); // Use the useCallback function
 
-    if (projectId) {
-      fetchProjectTasks();
-    }
-  }, [projectId]);
+  // --- Event Handlers ---
 
   const copyToClipboard = (text: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
-      toast.success("GitHub URL copied to clipboard!");
+      toast.success("URL copied to clipboard!");
     });
   };
 
-  const handleViewExplanationClick = (task: Task, colour: string) => {
-    if (selectionMode) return;
-    settaskColour(colour);
-    setSelectedTaskDetails(task);
-    setIsDialogOpen(true);
+  // Open Submit Dialog
+  const handleOpenSubmitDialog = (task: Task) => {
+    setSubmitTaskData(task);
+    setSubmissionUrl(task.gitHubUrl || "");
+    setSubmissionContext(task.context || "");
   };
 
-  const handleCloseModal = () => {
-    setSelectedTaskDetails(null);
-    setmarkpending(false);
-    setIsDialogOpen(false);
-    setReassignedTask(null);
+  const handleCloseSubmitDialog = () => {
+    setSubmitTaskData(null);
+    setSubmissionUrl("");
+    setSubmissionContext("");
+    setIsSubmitting(false);
   };
 
-  const handleMarkPending = async () => {
-    if (!selectedTaskDetails) return;
-    const confirmSubmit = window.confirm(
-      "Are you sure about marking this Task pending? This will result in deletion of the submission data of the task."
-    );
-    if (!confirmSubmit) return;
-    if (feedback === "") {
-      toast.error("Please enter feedback");
+  // Handle Task Submission
+  const handleSubmitTask = async () => {
+    if (!submitTaskData || !submissionUrl.trim()) {
+      toast.error("GitHub URL is required for submission.");
       return;
     }
     try {
-      const response = await fetch(
-        `/api/teamData/teamLeaderData/markTaskPending/${selectedTaskDetails.TaskId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ feedback }),
-        }
-      );
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success("Task marked as pending!");
-        setTasks((prevTasks) =>
-          prevTasks.map((task) =>
-            task.TaskId === selectedTaskDetails.TaskId
-              ? { ...task, status: "Pending" }
-              : task
-          )
-        );
-        handleCloseModal();
-      } else {
-        toast.error(data.message || "Failed to mark task as pending.");
-        router.push("/teamData/ProfileTeam");
-      }
-    } catch (error) {
-      console.error("Error marking task as pending:", error);
-      toast.error("Failed to mark task as pending.");
-      router.push("/teamData/ProfileTeam");
-    }
-  };
-
-  const handleMarkCompleted = async () => {
-    if (!selectedTaskDetails) return;
-    const confirmSubmit = window.confirm(
-      "Are you sure about marking this Task as Completed?"
-    );
-    if (!confirmSubmit) return;
-    try {
-      const response = await fetch(
-        `/api/teamData/teamLeaderData/markTaskCompleted/${selectedTaskDetails.TaskId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success("Task marked as completed!");
-        setTasks((prevTasks) =>
-          prevTasks.map((task) =>
-            task.TaskId === selectedTaskDetails.TaskId
-              ? { ...task, status: "Completed" }
-              : task
-          )
-        );
-        handleCloseModal();
-      } else {
-        toast.error(data.message || "Failed to mark task as completed.");
-      }
-    } catch (error) {
-      console.error("Error marking task as completed:", error);
-      toast.error("Failed to mark task as completed.");
-    }
-  };
-
-  const toggleTaskSelection = (taskId: string) => {
-    if (!selectionMode) return;
-
-    setSelectedTaskIds((prevSelectedIds) =>
-      prevSelectedIds.includes(taskId)
-        ? prevSelectedIds.filter((id) => id !== taskId)
-        : [...prevSelectedIds, taskId]
-    );
-  };
-
-  const enableSelectionMode = () => {
-    setSelectionMode(true);
-  };
-
-  const cancelSelection = () => {
-    setSelectionMode(false);
-    setSelectedTaskIds([]);
-  };
-
-  const handleUpdateTask = (taskId: string, status: string) => {
-    if (selectionMode) return;
-    if (!status) return;
-
-    if (status === "Completed") {
-      const confirmSubmit = window.confirm(
-        "This Task has already been Completed. Updating it will override the current implementation. Are you sure you want to update it?"
-      );
-      if (!confirmSubmit) return;
-    }
-
-    if (status === "In Progress") {
-      const confirmSubmit = window.confirm(
-        "This Task has already been Performed by the user. Updating it will override the current implementation. Are you sure you want to update it?"
-      );
-      if (!confirmSubmit) return;
-    }
-
-    router.push(
-      `/teamData/teamLeaderData/ProjectTasks/${projectId}/updateTask/${taskId}`
-    );
-  };
-
-  const handleDeleteSelectedTasks = async () => {
-    if (selectedTaskIds.length === 0) {
-      toast.error("No tasks selected for deletion");
+      new URL(submissionUrl);
+    } catch (_) {
+      toast.error("Please enter a valid GitHub URL.");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedTaskIds.length} selected task${selectedTaskIds.length > 1 ? "s" : ""}?`
-    );
-
-    if (confirmed) {
-      try {
-        const response = await fetch(
-          "/api/teamData/teamLeaderData/deleteSelectedTasks",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskIds: selectedTaskIds }),
-          }
-        );
-        const data = await response.json();
-        if (data.success) {
-          toast.success(
-            `${selectedTaskIds.length} task${selectedTaskIds.length > 1 ? "s" : ""} deleted successfully!`
-          );
-          setTasks((prevTasks) =>
-            prevTasks.filter((task) => !selectedTaskIds.includes(task.TaskId))
-          );
-          setSelectedTaskIds([]);
-          setSelectionMode(false);
-        } else {
-          toast.error(data.message || "Failed to delete tasks.");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `/api/teamData/teamLeaderData/submitTask/${submitTaskData.TaskId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            gitHubUrl: submissionUrl.trim(),
+            context: submissionContext.trim(),
+          }),
         }
-      } catch (error) {
-        toast.error("Failed to delete tasks. Please try again.");
-      }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success)
+        throw new Error(data.message || "Failed to submit task.");
+
+      toast.success(`Task '${submitTaskData.title}' submitted successfully!`);
+      // Update task status locally
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.TaskId === submitTaskData.TaskId
+            ? {
+                ...task,
+                status: "In Progress",
+                gitHubUrl: submissionUrl.trim(),
+                context: submissionContext.trim(),
+                submittedby: currentUser?.UserId,
+              }
+            : task
+        )
+      );
+      handleCloseSubmitDialog();
+    } catch (error: any) {
+      console.error("Error submitting task:", error);
+      toast.error(error.message || "Failed to submit task.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getStatusDetails = (status: string) => {
-    switch (status) {
-      case "Pending":
-        return {
-          variant: "outline" as const,
-          icon: <AlertCircle className="h-3 w-3 mr-1" />,
-          className: "",
-          borderStyle: "",
-          bgStyle: "",
-        };
-      case "In Progress":
-        return {
-          variant: "outline" as const,
-          icon: <RefreshCw className="h-3 w-3 mr-1" />,
-          className:
-            "bg-blue-100 text-blue-800 border-blue-500 hover:bg-blue-200",
-          borderStyle: "border-l-4 border-blue-500",
-          bgStyle: "bg-blue-50",
-        };
-      case "Completed":
-        return {
-          variant: "outline" as const,
-          icon: <CheckCircle className="h-3 w-3 mr-1" />,
-          className:
-            "bg-green-100 text-green-800 border-green-500 hover:bg-green-200",
-          borderStyle: "border-l-4 border-green-500",
-          bgStyle: "bg-green-50",
-        };
-      case "Re Assigned":
-        return {
-          variant: "outline" as const,
-          icon: <AlertTriangle className="h-3 w-3 mr-1" />,
-          className:
-            "bg-amber-100 text-amber-800 border-amber-500 hover:bg-amber-200",
-          borderStyle: "border-l-4 border-amber-500",
-          bgStyle: "bg-amber-50",
-        };
-      default:
-        return {
-          variant: "outline" as const,
-          icon: <Info className="h-3 w-3 mr-1" />,
-          className: "",
-          borderStyle: "",
-          bgStyle: "",
-        };
-    }
+  // Navigate to Subtasks Page
+  const handleNavigateToSubtasks = (taskId: string) => {
+    router.push(`/teamData/teamLeaderData/SubTasks/${taskId}`);
   };
 
-  const getUserDetails = (userId: string) => {
-    const member = members.find((m) => m.UserId === userId);
-    return member
-      ? {
-          name: `${member.firstname} ${member.lastname}`,
-          email: member.email,
-          profilepic: member.profilepic,
-        }
-      : { name: "Unknown User", email: userId, profilepic: "" };
+  // Open View Completed Task Dialog
+  const handleViewCompletedTask = (task: Task) => {
+    setViewCompletedTaskData(task);
   };
 
-  const getSubmitterDetails = (submittedById?: string) => {
-    if (!submittedById) return null;
-    const submitter = submitters.find((s) => s.UserId === submittedById);
-    return submitter
-      ? {
-          name: `${submitter.firstname} ${submitter.lastname}`,
-          email: submitter.email,
-          profilepic: submitter.profilepic,
-        }
-      : { name: "Unknown User", email: submittedById, profilepic: "" };
+  const handleCloseViewCompletedDialog = () => {
+    setViewCompletedTaskData(null);
   };
 
-  const filteredTasks = tasks.filter((task) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      task.status.toLowerCase() === statusFilter.toLowerCase();
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const sortedTasks = filteredTasks.sort((a, b) => {
-    const statusOrder: { [key: string]: number } = {
-      "Re Assigned": 1,
-      Pending: 2,
-      "In Progress": 3,
-      Completed: 4,
-    };
-    return statusOrder[a.status] - statusOrder[b.status];
-  });
-
-  const handleCreateTask = () => {
-    if (selectionMode) return;
-    router.push(`/teamData/teamLeaderData/CreateSpecifiedTask/${projectId}`);
+  // Filter/Sort Logic
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
   };
 
-  const handleMarkPendingstate = () => {
-    setmarkpending(true);
-  };
+  const filteredAndSortedTasks = tasks
+    .filter((task) => {
+      const lowerSearchQuery = searchQuery.toLowerCase();
+      const matchesSearch =
+        searchQuery === "" ||
+        task.title.toLowerCase().includes(lowerSearchQuery) ||
+        task.description.toLowerCase().includes(lowerSearchQuery);
+      // --- FIX: Ensure status comparison is case-insensitive if filter value is lowercase ---
+      const matchesStatus =
+        statusFilter === "all" ||
+        task.status.toLowerCase() === statusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      // --- FIX: Sort logic looks okay, added nullish coalescing ---
+      const statusOrder: { [key: string]: number } = {
+        "Re Assigned": 1,
+        Pending: 2,
+        "In Progress": 3,
+        Completed: 4,
+      };
+      const orderA = statusOrder[a.status] ?? 99;
+      const orderB = statusOrder[b.status] ?? 99;
+      return orderA - orderB;
+    });
+
+  // --- Render Logic ---
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
-        <span className="ml-2">Loading tasks...</span>
+      <div className="container mx-auto p-6 space-y-6">
+        <Skeleton className="h-8 w-1/2 mx-auto" />
+        <div className="flex justify-end">
+          {" "}
+          {/* Adjusted skeleton */}
+          <Skeleton className="h-9 w-64" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-lg" />
+          ))}
+        </div>
       </div>
     );
   }
-
   if (error) {
     return (
-      <div className="p-4 sm:p-8 text-center">
-        <div className="bg-destructive/20 p-4 sm:p-6 rounded-lg max-w-md mx-auto">
-          <XCircle className="w-10 h-10 sm:w-12 sm:h-12 text-destructive mx-auto mb-3 sm:mb-4" />
-          <h2 className="text-lg sm:text-xl font-semibold text-destructive mb-2">
-            Error
-          </h2>
-          <p className="text-muted-foreground">{error}</p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => router.push("/teamData/ProfileTeam")}
-          >
-            Return to Team Profile
-          </Button>
-        </div>
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Tasks</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button
+          variant="outline"
+          onClick={() => router.back()}
+          className="mt-4"
+        >
+          Go Back
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-4 sm:py-8">
-      <div className="text-center mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2">{ProjectTitle}</h1>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Manage and track your project tasks
+    <div className="container mx-auto p-4 sm:p-6">
+      {/* Header */}
+      <div className="text-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-1 flex items-center justify-center gap-2">
+          <Briefcase className="h-6 w-6 flex-shrink-0" />
+          <span>{projectTitle || `Project ${projectId}`}</span>
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Tasks assigned to your team
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
-        {!selectionMode ? (
-          <>
-            <Button
-              onClick={handleCreateTask}
-              className="flex items-center gap-1 sm:gap-2 text-sm"
-              size="sm"
-            >
-              <PlusCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Create Task
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={enableSelectionMode}
-              className="flex items-center gap-1 sm:gap-2 text-sm"
-              size="sm"
-            >
-              <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Select Tasks
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              onClick={cancelSelection}
-              className="flex items-center gap-1 sm:gap-2 text-sm"
-              size="sm"
-            >
-              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Cancel Selection
-            </Button>
-
-            <Button
-              variant="destructive"
-              onClick={handleDeleteSelectedTasks}
-              className="flex items-center gap-1 sm:gap-2 text-sm"
-              size="sm"
-              disabled={selectedTaskIds.length === 0}
-            >
-              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Delete Selected (
-              {selectedTaskIds.length})
-            </Button>
-          </>
-        )}
-      </div>
-
-      <div className="bg-card shadow-sm rounded-lg p-3 sm:p-4 mb-6 sm:mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+      {/* Filters/View Options */}
+      <div className="flex flex-col md:flex-row justify-end items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-grow md:flex-grow-0">
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              type="text"
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-sm sm:text-base h-9 sm:h-10"
+              className="pl-8 w-full md:w-48 lg:w-64 h-9"
             />
           </div>
-
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
-              <SelectValue placeholder="Filter by status" />
+            <SelectTrigger className="w-auto md:w-[160px] h-9 text-xs sm:text-sm">
+              <SelectValue placeholder="Filter Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
@@ -537,437 +477,279 @@ export default function ProjectTasksPage() {
               <SelectItem value="re assigned">Re-Assigned</SelectItem>
             </SelectContent>
           </Select>
+          {(searchQuery || statusFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearFilters}
+              className="h-9 w-9"
+            >
+              {" "}
+              <X className="h-4 w-4" />{" "}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+            className="h-9 w-9"
+          >
+            {viewMode === "grid" ? (
+              <LayoutList className="h-4 w-4" />
+            ) : (
+              <LayoutGrid className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
 
-      {sortedTasks.length === 0 ? (
-        <div className="text-center p-6 sm:p-12 bg-muted/20 rounded-lg">
-          <Info className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-muted-foreground mb-2" />
-          <h3 className="text-lg sm:text-xl font-medium mb-2">
-            No tasks found
-          </h3>
+      {/* Task List/Grid */}
+      {tasks.length === 0 ? (
+        <div className="text-center py-12 border rounded-lg bg-card mt-6">
+          <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-xl font-medium mb-2">No Tasks Assigned</h3>
+          <p className="text-muted-foreground mb-6">
+            There are currently no tasks assigned to your team for this project.
+          </p>
+        </div>
+      ) : filteredAndSortedTasks.length === 0 ? (
+        <div className="text-center py-12 border rounded-lg bg-card mt-6">
+          <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-xl font-medium mb-2">No Matching Tasks</h3>
+          <p className="text-muted-foreground mb-6">
+            Try adjusting your search or filter criteria.
+          </p>
+          <Button variant="outline" onClick={clearFilters}>
+            <X className="mr-2 h-4 w-4" /> Clear Filters
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {sortedTasks.map((task) => {
-            const statusDetails = getStatusDetails(task.status);
-            const isAssignedToCurrentUser =
-              currentUser && task.assignedTo.includes(currentUser.UserId);
-            const deadlineDate = new Date(task.deadline);
-            const isPastDeadline = deadlineDate < new Date();
-            const isSelected = selectedTaskIds.includes(task.TaskId);
-
-            return (
-              <Card
-                key={task.TaskId}
-                className={`transition-all duration-300 ${statusDetails.borderStyle} ${statusDetails.bgStyle} ${
-                  isSelected
-                    ? "ring-2 ring-primary border-primary bg-primary/5"
-                    : ""
-                } group relative hover:shadow-lg hover:-translate-y-1 cursor-pointer`}
-                onClick={() =>
-                  selectionMode ? toggleTaskSelection(task.TaskId) : null
-                }
-              >
-                {selectionMode && (
-                  <div className="absolute top-2 right-2 z-10">
-                    <div
-                      className={`h-5 w-5 rounded-sm border ${
-                        isSelected
-                          ? "bg-primary border-primary text-white"
-                          : "border-gray-300 bg-white"
-                      } flex items-center justify-center`}
-                    >
-                      {isSelected && <Check className="h-3 w-3" />}
-                    </div>
-                  </div>
-                )}
-
-                <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-base sm:text-xl">
-                      {task.title}
-                    </CardTitle>
-                    <Badge
-                      variant={statusDetails.variant}
-                      className={cn(
-                        "flex items-center text-xs sm:text-sm",
-                        statusDetails.className
-                      )}
-                    >
-                      {statusDetails.icon}
-                      {task.status}
-                    </Badge>
-                  </div>
-                  <CardDescription className="mt-2 line-clamp-2 text-xs sm:text-sm">
-                    {task.description}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-3 sm:space-y-4 pb-2 px-3 sm:px-6">
-                  <div className="flex items-start space-x-2">
-                    <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs sm:text-sm font-medium">Deadline</p>
-                      <p
-                        className={`text-xs sm:text-sm ${isPastDeadline ? "text-destructive" : "text-muted-foreground"}`}
-                      >
-                        {deadlineDate.toLocaleString("en-US", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 flex items-center">
-                      <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                      Assigned to:
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {task.assignedTo.map((userId) => {
-                        const user = getUserDetails(userId);
-                        const isCurrentUser =
-                          currentUser && userId === currentUser.UserId;
-
-                        return (
-                          <TooltipProvider key={userId}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div
-                                  className={`flex items-center gap-1 sm:gap-2 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs ${
-                                    isCurrentUser
-                                      ? "bg-primary/10 text-primary"
-                                      : "bg-muted text-muted-foreground"
-                                  }`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Avatar className="h-4 w-4 sm:h-5 sm:w-5">
-                                    <AvatarImage
-                                      src={user.profilepic}
-                                      alt={user.name}
-                                    />
-                                    <AvatarFallback className="text-[10px] sm:text-xs">
-                                      {user.name.charAt(0)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="truncate max-w-[80px] sm:max-w-[100px] text-[10px] sm:text-xs">
-                                    {user.name}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="text-xs sm:text-sm">
-                                  {user.email}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="pt-0 flex justify-between items-center px-3 sm:px-6 pb-3 sm:pb-6">
-                  <div className="flex-1">
-                    {task.status === "In Progress" && !selectionMode && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-blue-600 text-xs sm:text-sm h-8 px-2 sm:px-3"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewExplanationClick(task, "bg-blue-50");
-                        }}
-                      >
-                        <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">View</span>{" "}
-                        Implementation
-                      </Button>
-                    )}
-
-                    {task.status === "Completed" && !selectionMode && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-green-600 text-xs sm:text-sm h-8 px-2 sm:px-3"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewExplanationClick(task, "bg-green-50");
-                        }}
-                      >
-                        <Github className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">View</span>{" "}
-                        Implementation
-                      </Button>
-                    )}
-
-                    {task.status === "Re Assigned" && !selectionMode && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-amber-600 text-xs sm:text-sm h-8 px-2 sm:px-3"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setReassignedTask(task);
-                        }}
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">View</span> Feedback
-                      </Button>
-                    )}
-                  </div>
-
-                  {!selectionMode && (
-                    <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-black bg-transparent hover:bg-gray-100 sm:hover:bg-transparent sm:hover:text-fuchsia-600"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateTask(task.TaskId, task.status);
-                              }}
-                            >
-                              <FileEdit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs sm:text-sm">
-                              Update this task
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  )}
-                </CardFooter>
-              </Card>
-            );
-          })}
+        // --- FIX: Corrected JSX syntax for mapping ---
+        <div
+          className={`grid gap-4 sm:gap-6 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1"}`}
+        >
+          {filteredAndSortedTasks.map((task) => (
+            <TaskCardTeamLead
+              key={task.TaskId}
+              task={task}
+              onOpenSubmitDialog={handleOpenSubmitDialog}
+              onNavigateToSubtasks={handleNavigateToSubtasks}
+              onViewCompletedTask={handleViewCompletedTask}
+            />
+          ))}
         </div>
       )}
 
+      {/* --- Modals --- */}
+
+      {/* Submit Task Dialog */}
+      {/* --- FIX: Corrected state variable names --- */}
       <Dialog
-        open={isDialogOpen && !!selectedTaskDetails}
-        onOpenChange={(open) => {
-          if (!open) handleCloseModal();
-          else setIsDialogOpen(true);
-        }}
+        open={!!submitTaskData}
+        onOpenChange={(open) => !open && handleCloseSubmitDialog()}
       >
-        <DialogContent className="sm:max-w-[600px] max-w-[95vw] p-4 sm:p-6">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">
-              {selectedTaskDetails?.status === "Completed"
-                ? "Completed Task"
-                : "Task Implementation"}
-            </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              Review the implementation details for this task.
+            <DialogTitle>Submit Task: {submitTaskData?.title}</DialogTitle>
+            <DialogDescription>
+              Provide the final GitHub repository URL and any relevant context
+              for this task.
+              {submitTaskData?.status === "In Progress" && (
+                <span className="text-amber-600 block mt-1">
+                  {" "}
+                  Note: Re-submitting will overwrite previous submission
+                  details.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-1">
-            <Label className="flex items-center text-xs sm:text-sm font-medium">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
-              Submitted By
-            </Label>
-            <div className="text-xs sm:text-sm text-muted-foreground">
-              {(() => {
-                const submitter = selectedTaskDetails?.submittedby
-                  ? getSubmitterDetails(selectedTaskDetails.submittedby)
-                  : null;
-                return submitter
-                  ? `${submitter.name} (${submitter.email})`
-                  : "Not submitted yet";
-              })()}
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-1">
-            <Label className="flex items-center text-xs sm:text-sm font-medium">
-              <GithubIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
-              GitHub URL
-            </Label>
-            <div className="flex items-center space-x-2">
+          <div className="space-y-4 py-4">
+            <div className="space-y-1">
+              <Label htmlFor="github-url" className="flex items-center">
+                <Github className="w-4 h-4 mr-2" />
+                GitHub URL*
+              </Label>
               <Input
-                value={selectedTaskDetails?.gitHubUrl || ""}
-                readOnly
-                className="font-mono text-xs sm:text-sm h-8 sm:h-10"
+                id="github-url"
+                placeholder="https://github.com/..."
+                value={submissionUrl}
+                onChange={(e) => setSubmissionUrl(e.target.value)}
+                disabled={isSubmitting}
               />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  copyToClipboard(selectedTaskDetails?.gitHubUrl || "")
-                }
-                className="h-8 sm:h-10 w-8 sm:w-10 p-0"
-              >
-                <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </Button>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="context" className="flex items-center">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Context/Explanation (Optional)
+              </Label>
+              <Textarea
+                id="context"
+                placeholder="Add any notes or context about your submission..."
+                value={submissionContext}
+                onChange={(e) => setSubmissionContext(e.target.value)}
+                rows={4}
+                disabled={isSubmitting}
+              />
             </div>
           </div>
-
-          {markpending ? (
-            <div className="space-y-1">
-              <Label className="flex items-center text-xs sm:text-sm font-medium">
-                <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-amber-500" />
-                Feedback for Rejection
-              </Label>
-              <Textarea
-                value={feedback}
-                onChange={(e) => setfeedback(e.target.value)}
-                placeholder="Please provide feedback on why this task is being marked as pending..."
-                className="min-h-[100px] sm:min-h-[120px] text-xs sm:text-sm"
-              />
-              {feedback.trim() === "" && (
-                <p className="text-[10px] sm:text-xs text-red-500">
-                  Feedback is required
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <Label className="flex items-center text-xs sm:text-sm font-medium">
-                Implementation Details
-              </Label>
-              <Textarea
-                value={
-                  selectedTaskDetails?.context || "No explanation provided"
-                }
-                readOnly
-                className="min-h-[100px] sm:min-h-[120px] text-xs sm:text-sm"
-              />
-            </div>
-          )}
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            {selectedTaskDetails?.status === "In Progress" && (
-              <>
-                {markpending ? (
-                  <Button
-                    variant="destructive"
-                    onClick={handleMarkPending}
-                    disabled={feedback.trim() === ""}
-                    className="text-xs sm:text-sm h-8 sm:h-10"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                    Confirm Rejection
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      variant="destructive"
-                      onClick={handleMarkPendingstate}
-                      className="text-xs sm:text-sm h-8 sm:h-10"
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Mark as Pending
-                    </Button>
-                    <Button
-                      variant="default"
-                      onClick={handleMarkCompleted}
-                      className="text-xs sm:text-sm h-8 sm:h-10"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Mark as Completed
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-
-            {selectedTaskDetails?.status === "Completed" && (
-              <>
-                {markpending ? (
-                  <Button
-                    variant="destructive"
-                    onClick={handleMarkPending}
-                    disabled={feedback.trim() === ""}
-                    className="text-xs sm:text-sm h-8 sm:h-10"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                    Confirm Rejection
-                  </Button>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    onClick={handleMarkPendingstate}
-                    className="text-xs sm:text-sm h-8 sm:h-10"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                    Mark as Pending
-                  </Button>
-                )}
-              </>
-            )}
-
+          <DialogFooter>
             <Button
               variant="outline"
-              onClick={handleCloseModal}
-              className="text-xs sm:text-sm h-8 sm:h-10"
+              onClick={handleCloseSubmitDialog}
+              disabled={isSubmitting}
             >
-              Close
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitTask}
+              disabled={isSubmitting || !submissionUrl.trim()}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" /> Submit Task
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* View Completed Task Dialog */}
+      {/* --- FIX: Corrected state variable names and added type check for find callback --- */}
       <Dialog
-        open={reassignedTask !== null}
-        onOpenChange={(open) => !open && setReassignedTask(null)}
+        open={!!viewCompletedTaskData}
+        onOpenChange={(open) => !open && handleCloseViewCompletedDialog()}
       >
-        <DialogContent className="sm:max-w-[600px] max-w-[95vw] p-4 sm:p-6">
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">
-              Feedback on {reassignedTask?.title}
+            <DialogTitle className="text-xl flex items-center gap-2">
+              {viewCompletedTaskData?.title || "Completed Task"}
+              <Badge
+                variant="secondary"
+                className="ml-auto bg-green-100 text-green-800"
+              >
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Completed
+              </Badge>
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              This task has been reassigned with the following feedback.
-            </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-1">
-            <Label className="flex items-center text-xs sm:text-sm font-medium">
-              <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-amber-500" />
-              Feedback
-            </Label>
-            <div className="border border-amber-200 rounded-md p-3 sm:p-4 bg-amber-50">
-              <Textarea
-                value={reassignedTask?.context || "No feedback provided"}
-                readOnly
-                rows={6}
-                className="bg-transparent border-0 focus-visible:ring-0 resize-none min-h-[100px] sm:min-h-[120px] text-xs sm:text-sm"
-              />
+          {viewCompletedTaskData && (
+            <div className="space-y-4 py-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5 mr-1.5" /> Deadline
+                  </Label>
+                  <p>
+                    {format(new Date(viewCompletedTaskData.deadline), "PPPp")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Last Updated
+                  </Label>
+                  <p>
+                    {format(new Date(viewCompletedTaskData.updatedAt), "PPp")}
+                  </p>
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Description
+                </Label>
+                <Textarea
+                  value={viewCompletedTaskData.description}
+                  readOnly
+                  className="min-h-[80px] bg-muted/30 border-none"
+                />
+              </div>
+              <Separator />
+              <h4 className="text-base font-semibold pt-2">
+                Submission Details
+              </h4>
+              <div className="space-y-3 pl-2 border-l-2">
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <User className="w-3.5 h-3.5 mr-1.5" /> Submitted By
+                  </Label>
+                  <p className="text-sm">
+                    {viewCompletedTaskData.submittedby &&
+                    viewCompletedTaskData.submittedby !== "Not-submitted"
+                      ? (() => {
+                          const s = submitters.find(
+                            (sub: Member) =>
+                              sub.UserId === viewCompletedTaskData?.submittedby
+                          );
+                          return s
+                            ? `${s.firstname} ${s.lastname} (${s.email})`
+                            : `User ID: ${viewCompletedTaskData.submittedby}`;
+                        })()
+                      : "N/A"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="view-github-url"
+                    className="flex items-center text-xs font-medium text-muted-foreground"
+                  >
+                    <Github className="w-3.5 h-3.5 mr-1.5" /> GitHub URL
+                  </Label>
+                  {viewCompletedTaskData.gitHubUrl ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="view-github-url"
+                        value={viewCompletedTaskData.gitHubUrl}
+                        readOnly
+                        className="font-mono text-xs h-8 flex-1 bg-muted/30 border-none"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() =>
+                          copyToClipboard(
+                            viewCompletedTaskData?.gitHubUrl || ""
+                          )
+                        }
+                        aria-label="Copy GitHub URL"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No URL provided.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="view-context"
+                    className="flex items-center text-xs font-medium text-muted-foreground"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 mr-1.5" />{" "}
+                    Explanation/Context
+                  </Label>
+                  <Textarea
+                    id="view-context"
+                    value={
+                      viewCompletedTaskData.context ||
+                      "No explanation provided."
+                    }
+                    readOnly
+                    className="min-h-[80px] text-sm bg-muted/30 border-none"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="default"
-              onClick={() => {
-                setReassignedTask(null);
-                if (reassignedTask)
-                  handleUpdateTask(
-                    reassignedTask.TaskId,
-                    reassignedTask.status
-                  );
-              }}
-              className="text-xs sm:text-sm h-8 sm:h-10"
-            >
-              Update Task
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setReassignedTask(null)}
-              className="text-xs sm:text-sm h-8 sm:h-10"
-            >
+          )}
+          <DialogFooter className="pt-4 mt-4 border-t">
+            <Button variant="outline" onClick={handleCloseViewCompletedDialog}>
               Close
             </Button>
           </DialogFooter>

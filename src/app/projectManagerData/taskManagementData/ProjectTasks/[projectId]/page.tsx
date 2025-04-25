@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format } from "date-fns"; // Import date-fns for formatting
 
@@ -72,6 +72,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"; // Import AlertDialog components
 import { cn } from "@/lib/utils"; // Import cn if needed for TaskCard styling
+import { ProjectCard } from "@/app/projectManagerData/ProjectManagementData/ManageProject/components/project-card";
 
 // Interfaces
 interface Task {
@@ -119,7 +120,7 @@ export default function ManageTasksPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMarkPendingConfirm, setShowMarkPendingConfirm] = useState(false);
-
+  const { projectId } = useParams();
   // State for the update confirmation dialog
   const [updateConfirmDialog, setUpdateConfirmDialog] = useState<{
     isOpen: boolean;
@@ -402,7 +403,9 @@ export default function ManageTasksPage() {
 
   // Navigation
   const handleCreateTask = () => {
-    router.push("/projectManagerData/taskManagementData/CreateTask");
+    router.push(
+      `/projectManagerData/taskManagementData/CreateSpecifiedTask/${projectId}`
+    );
   };
 
   // Loading and Error States
