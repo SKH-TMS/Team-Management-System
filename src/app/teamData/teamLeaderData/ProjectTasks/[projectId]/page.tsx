@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react"; // Added useCallback
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
@@ -36,15 +36,15 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"; // Import Card components
-import { Badge } from "@/components/ui/badge"; // Import Badge
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"; // Import Tooltip
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar
+} from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertCircle,
   Briefcase,
@@ -67,28 +67,34 @@ import {
   MessageSquare,
   Info,
 } from "lucide-react";
-import { cn } from "@/lib/utils"; // Import cn
+import { cn } from "@/lib/utils";
 
-// --- CHANGE: Corrected import path assumption ---
-import type { Task, Member } from "./types"; // Assuming types.ts is in the same directory
+// Assuming types.ts is in the same directory or adjust path
+// Make sure this path is correct for your project structure
+import type { Task, Member } from "./types";
 
-// --- Placeholder Task Card Component (Extract Later) ---
+// --- Task Card Component (Placeholder - Extract to its own file later) ---
 interface TaskCardTeamLeadProps {
   task: Task;
-  onOpenSubmitDialog: (task: Task) => void;
-  onNavigateToSubtasks: (taskId: string) => void;
-  onViewCompletedTask: (task: Task) => void;
+  onClick: () => void; // Handler for clicking the card itself
+  onOpenSubmitDialog: (e: React.MouseEvent, task: Task) => void; // Pass event to stop propagation
+  onNavigateToSubtasks: (e: React.MouseEvent, taskId: string) => void; // Pass event
+  onViewCompletedTask: (e: React.MouseEvent, task: Task) => void; // Pass event
 }
 
 function TaskCardTeamLead({
   task,
+  onClick,
   onOpenSubmitDialog,
   onNavigateToSubtasks,
   onViewCompletedTask,
 }: TaskCardTeamLeadProps) {
+  // Helper to get status badge styling
   const getStatusBadge = () => {
-    switch (task.status) {
-      case "In Progress":
+    switch (
+      task.status?.toLowerCase() // Use optional chaining and lower case
+    ) {
+      case "in progress":
         return (
           <Badge
             variant="secondary"
@@ -98,7 +104,7 @@ function TaskCardTeamLead({
             In Progress
           </Badge>
         );
-      case "Completed":
+      case "completed":
         return (
           <Badge
             variant="secondary"
@@ -108,7 +114,7 @@ function TaskCardTeamLead({
             Completed
           </Badge>
         );
-      case "Pending":
+      case "pending":
         return (
           <Badge
             variant="secondary"
@@ -118,7 +124,7 @@ function TaskCardTeamLead({
             Pending
           </Badge>
         );
-      case "Re Assigned":
+      case "re assigned":
         return (
           <Badge
             variant="secondary"
@@ -129,57 +135,80 @@ function TaskCardTeamLead({
           </Badge>
         );
       default:
-        return <Badge className="text-xs px-1.5 py-0.5">{task.status}</Badge>;
+        return (
+          <Badge className="text-xs px-1.5 py-0.5">
+            {task.status || "Unknown"}
+          </Badge>
+        );
     }
   };
 
+  // Helper to get background color based on status
   const getBgColor = () => {
-    switch (task.status) {
-      case "In Progress":
+    switch (
+      task.status?.toLowerCase() // Use optional chaining and lower case
+    ) {
+      case "in progress":
         return "bg-blue-50 border-blue-200";
-      case "Completed":
+      case "completed":
         return "bg-green-50 border-green-200";
-      case "Pending":
+      case "pending":
         return "bg-gray-50 border-gray-200";
-      case "Re Assigned":
+      case "re assigned":
         return "bg-amber-50 border-amber-200";
       default:
-        return "bg-card border";
+        return "bg-card border"; // Default card background and border
     }
   };
 
   return (
     <Card
       className={cn(
-        "overflow-hidden transition-all duration-200 group relative border hover:shadow-md",
-        getBgColor()
+        "overflow-hidden rounded-lg shadow hover:shadow-lg sm:hover:shadow-2xl transform transition-all duration-300 sm:hover:-translate-y-1 cursor-pointer border-l-4",
+        getBgColor() // Apply background color class
       )}
+      onClick={onClick} // Attach the main card click handler
     >
-      <CardHeader className="pb-2">
+      {/* Responsive Padding: px-4 sm:px-6 */}
+      <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-5">
         <div className="flex justify-between items-start gap-2">
+          {/* Responsive Title Size: text-base sm:text-lg */}
           <CardTitle className="text-base sm:text-lg font-medium line-clamp-2 break-words">
             {task.title}
           </CardTitle>
           <div className="flex-shrink-0">{getStatusBadge()}</div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2 pb-3 text-sm">
-        <p className="text-muted-foreground line-clamp-3">{task.description}</p>
+      {/* Responsive Padding: px-4 sm:px-6 */}
+      <CardContent className="space-y-2 pb-3 text-sm px-4 sm:px-6">
+        {/* Responsive Line Clamp: line-clamp-2 sm:line-clamp-3 */}
+        <p className="text-muted-foreground line-clamp-2 sm:line-clamp-3">
+          {task.description}
+        </p>
         <div className="flex items-center text-xs text-muted-foreground pt-1">
           <Calendar className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+          {/* Format deadline date */}
           <span className="truncate">
-            Due: {format(new Date(task.deadline), "PPp")}
+            Due:{" "}
+            {task.deadline ? format(new Date(task.deadline), "PPp") : "N/A"}
           </span>
         </div>
       </CardContent>
-      <CardFooter className="pt-2 pb-3 flex justify-end items-center gap-2">
+      {/* Responsive Padding: px-4 sm:px-6 */}
+      <CardFooter className="pt-2 pb-3 flex flex-wrap justify-end items-center gap-2 px-4 sm:px-6">
+        {" "}
+        {/* Added flex-wrap */}
         {/* Conditional Buttons for Team Leader */}
         {task.status === "Completed" ? (
+          // Responsive Button: text-xs h-7 px-2
           <Button
             variant="outline"
             size="sm"
-            className="text-xs"
-            onClick={() => onViewCompletedTask(task)}
+            className="text-xs px-2 h-7"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewCompletedTask(e, task);
+            }}
           >
             <Eye className="w-3.5 h-3.5 mr-1" /> View Submission
           </Button>
@@ -189,21 +218,31 @@ function TaskCardTeamLead({
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs"
-                onClick={() => onNavigateToSubtasks(task.TaskId)}
+                className="text-xs px-2 h-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigateToSubtasks(e, task.TaskId);
+                }}
               >
                 <GitBranch className="w-3.5 h-3.5 mr-1" /> Manage Subtasks
               </Button>
             )}
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs"
-              onClick={() => onOpenSubmitDialog(task)}
-            >
-              <Send className="w-3.5 h-3.5 mr-1" />{" "}
-              {task.status === "In Progress" ? "Re-Submit" : "Submit Task"}
-            </Button>
+            {(task.status === "Pending" ||
+              task.status === "Re Assigned" ||
+              task.status === "In Progress") && (
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs px-2 h-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenSubmitDialog(e, task);
+                }}
+              >
+                <Send className="w-3.5 h-3.5 mr-1" />{" "}
+                {task.status === "In Progress" ? "Re-Submit" : "Submit Task"}
+              </Button>
+            )}
           </>
         )}
       </CardFooter>
@@ -239,10 +278,12 @@ export default function TeamLeadProjectTasksPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [viewCompletedTaskData, setViewCompletedTaskData] =
     useState<Task | null>(null);
+  const [viewTaskDetailsData, setViewTaskDetailsData] = useState<Task | null>(
+    null
+  );
 
   // Fetch Project Tasks for Team Leader
   const fetchTeamLeadProjectTasks = useCallback(async () => {
-    // Wrap in useCallback
     if (!projectId) {
       setError("Project ID is missing.");
       setLoading(false);
@@ -273,11 +314,11 @@ export default function TeamLeadProjectTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId]); // Add projectId as dependency
+  }, [projectId]);
 
   useEffect(() => {
     fetchTeamLeadProjectTasks();
-  }, [fetchTeamLeadProjectTasks]); // Use the useCallback function
+  }, [fetchTeamLeadProjectTasks]);
 
   // --- Event Handlers ---
 
@@ -289,7 +330,8 @@ export default function TeamLeadProjectTasksPage() {
   };
 
   // Open Submit Dialog
-  const handleOpenSubmitDialog = (task: Task) => {
+  const handleOpenSubmitDialog = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
     setSubmitTaskData(task);
     setSubmissionUrl(task.gitHubUrl || "");
     setSubmissionContext(task.context || "");
@@ -333,7 +375,6 @@ export default function TeamLeadProjectTasksPage() {
         throw new Error(data.message || "Failed to submit task.");
 
       toast.success(`Task '${submitTaskData.title}' submitted successfully!`);
-      // Update task status locally
       setTasks((prevTasks) =>
         prevTasks.map((task) =>
           task.TaskId === submitTaskData.TaskId
@@ -357,17 +398,58 @@ export default function TeamLeadProjectTasksPage() {
   };
 
   // Navigate to Subtasks Page
-  const handleNavigateToSubtasks = (taskId: string) => {
+  const handleNavigateToSubtasks = (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
     router.push(`/teamData/teamLeaderData/SubTasks/${taskId}`);
   };
 
   // Open View Completed Task Dialog
-  const handleViewCompletedTask = (task: Task) => {
+  const handleViewCompletedTask = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
     setViewCompletedTaskData(task);
   };
 
   const handleCloseViewCompletedDialog = () => {
     setViewCompletedTaskData(null);
+  };
+
+  // Open General Details Dialog
+  const handleCardClick = (task: Task) => {
+    setViewTaskDetailsData(task);
+  };
+  const handleCloseTaskDetailsDialog = () => {
+    setViewTaskDetailsData(null);
+  };
+
+  // Status Helper Functions
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return "bg-gray-100 text-gray-800 border-gray-300";
+      case "in progress":
+        return "bg-blue-100 text-blue-800 border-blue-300";
+      case "completed":
+        return "bg-green-100 text-green-800 border-green-300";
+      case "re assigned":
+        return "bg-amber-100 text-amber-800 border-amber-300";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-300";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return <Clock className="h-3 w-3" />;
+      case "in progress":
+        return <Loader2 className="h-3 w-3 animate-spin" />;
+      case "completed":
+        return <CheckCircle2 className="h-3 w-3" />;
+      case "re assigned":
+        return <RefreshCw className="h-3 w-3" />;
+      default:
+        return <Clock className="h-3 w-3" />;
+    }
   };
 
   // Filter/Sort Logic
@@ -383,14 +465,12 @@ export default function TeamLeadProjectTasksPage() {
         searchQuery === "" ||
         task.title.toLowerCase().includes(lowerSearchQuery) ||
         task.description.toLowerCase().includes(lowerSearchQuery);
-      // --- FIX: Ensure status comparison is case-insensitive if filter value is lowercase ---
       const matchesStatus =
         statusFilter === "all" ||
         task.status.toLowerCase() === statusFilter.toLowerCase();
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      // --- FIX: Sort logic looks okay, added nullish coalescing ---
       const statusOrder: { [key: string]: number } = {
         "Re Assigned": 1,
         Pending: 2,
@@ -409,8 +489,6 @@ export default function TeamLeadProjectTasksPage() {
       <div className="container mx-auto p-6 space-y-6">
         <Skeleton className="h-8 w-1/2 mx-auto" />
         <div className="flex justify-end">
-          {" "}
-          {/* Adjusted skeleton */}
           <Skeleton className="h-9 w-64" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -445,7 +523,7 @@ export default function TeamLeadProjectTasksPage() {
       {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold mb-1 flex items-center justify-center gap-2">
-          <Briefcase className="h-6 w-6 flex-shrink-0" />
+          <Briefcase className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
           <span>{projectTitle || `Project ${projectId}`}</span>
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -454,19 +532,21 @@ export default function TeamLeadProjectTasksPage() {
       </div>
 
       {/* Filters/View Options */}
-      <div className="flex flex-col md:flex-row justify-end items-center gap-2 mb-6">
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-grow md:flex-grow-0">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {" "}
+          {/* Adjusted width */}
+          <div className="relative flex-grow sm:flex-grow-0">
             <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 w-full md:w-48 lg:w-64 h-9"
+              className="pl-8 w-full sm:w-48 lg:w-64 h-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-auto md:w-[160px] h-9 text-xs sm:text-sm">
+            <SelectTrigger className="w-full sm:w-auto md:w-[160px] h-9 text-xs sm:text-sm">
               <SelectValue placeholder="Filter Status" />
             </SelectTrigger>
             <SelectContent>
@@ -482,7 +562,7 @@ export default function TeamLeadProjectTasksPage() {
               variant="ghost"
               size="icon"
               onClick={clearFilters}
-              className="h-9 w-9"
+              className="h-9 w-9 flex-shrink-0"
             >
               {" "}
               <X className="h-4 w-4" />{" "}
@@ -492,7 +572,7 @@ export default function TeamLeadProjectTasksPage() {
             variant="outline"
             size="icon"
             onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-            className="h-9 w-9"
+            className="h-9 w-9 flex-shrink-0"
           >
             {viewMode === "grid" ? (
               <LayoutList className="h-4 w-4" />
@@ -524,14 +604,14 @@ export default function TeamLeadProjectTasksPage() {
           </Button>
         </div>
       ) : (
-        // --- FIX: Corrected JSX syntax for mapping ---
         <div
-          className={`grid gap-4 sm:gap-6 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1"}`}
+          className={`grid gap-4 sm:gap-6 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}
         >
           {filteredAndSortedTasks.map((task) => (
             <TaskCardTeamLead
               key={task.TaskId}
               task={task}
+              onClick={() => handleCardClick(task)}
               onOpenSubmitDialog={handleOpenSubmitDialog}
               onNavigateToSubtasks={handleNavigateToSubtasks}
               onViewCompletedTask={handleViewCompletedTask}
@@ -543,7 +623,6 @@ export default function TeamLeadProjectTasksPage() {
       {/* --- Modals --- */}
 
       {/* Submit Task Dialog */}
-      {/* --- FIX: Corrected state variable names --- */}
       <Dialog
         open={!!submitTaskData}
         onOpenChange={(open) => !open && handleCloseSubmitDialog()}
@@ -620,7 +699,6 @@ export default function TeamLeadProjectTasksPage() {
       </Dialog>
 
       {/* View Completed Task Dialog */}
-      {/* --- FIX: Corrected state variable names and added type check for find callback --- */}
       <Dialog
         open={!!viewCompletedTaskData}
         onOpenChange={(open) => !open && handleCloseViewCompletedDialog()}
@@ -673,25 +751,7 @@ export default function TeamLeadProjectTasksPage() {
                 Submission Details
               </h4>
               <div className="space-y-3 pl-2 border-l-2">
-                <div className="space-y-1">
-                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
-                    <User className="w-3.5 h-3.5 mr-1.5" /> Submitted By
-                  </Label>
-                  <p className="text-sm">
-                    {viewCompletedTaskData.submittedby &&
-                    viewCompletedTaskData.submittedby !== "Not-submitted"
-                      ? (() => {
-                          const s = submitters.find(
-                            (sub: Member) =>
-                              sub.UserId === viewCompletedTaskData?.submittedby
-                          );
-                          return s
-                            ? `${s.firstname} ${s.lastname} (${s.email})`
-                            : `User ID: ${viewCompletedTaskData.submittedby}`;
-                        })()
-                      : "N/A"}
-                  </p>
-                </div>
+                <div className="space-y-1"></div>
                 <div className="space-y-1">
                   <Label
                     htmlFor="view-github-url"
@@ -750,6 +810,167 @@ export default function TeamLeadProjectTasksPage() {
           )}
           <DialogFooter className="pt-4 mt-4 border-t">
             <Button variant="outline" onClick={handleCloseViewCompletedDialog}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* General Task Details Dialog */}
+      <Dialog
+        open={!!viewTaskDetailsData}
+        onOpenChange={(open) => !open && handleCloseTaskDetailsDialog()}
+      >
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              {viewTaskDetailsData?.title || "Task Details"}
+              {viewTaskDetailsData?.status && (
+                <Badge
+                  variant="outline"
+                  className={`ml-auto ${getStatusColor(viewTaskDetailsData.status)}`}
+                >
+                  {getStatusIcon(viewTaskDetailsData.status)}
+                  <span className="ml-1">{viewTaskDetailsData.status}</span>
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information about this task.
+            </DialogDescription>
+          </DialogHeader>
+          {viewTaskDetailsData && (
+            <div className="space-y-4 py-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Briefcase className="w-3.5 h-3.5 mr-1.5" /> Project
+                  </Label>
+                  <p>{projectTitle || "N/A"}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5 mr-1.5" /> Deadline
+                  </Label>
+                  <p>
+                    {format(new Date(viewTaskDetailsData.deadline), "PPPp")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Created At
+                  </Label>
+                  <p>
+                    {format(new Date(viewTaskDetailsData.createdAt), "PPp")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Last Updated
+                  </Label>
+                  <p>
+                    {format(new Date(viewTaskDetailsData.updatedAt), "PPp")}
+                  </p>
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <Label className="flex items-center text-xs font-medium text-muted-foreground">
+                    <Info className="w-3.5 h-3.5 mr-1.5" /> Status
+                  </Label>
+                  <p>{viewTaskDetailsData.status}</p>
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-1">
+                <Label
+                  htmlFor="details-description"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Description
+                </Label>
+                <Textarea
+                  id="details-description"
+                  value={viewTaskDetailsData.description}
+                  readOnly
+                  className="min-h-[100px] bg-muted/30 border-none"
+                />
+              </div>
+              {(viewTaskDetailsData.submittedby &&
+                viewTaskDetailsData.submittedby !== "Not-submitted") ||
+              viewTaskDetailsData.status === "Completed" ||
+              viewTaskDetailsData.status === "Re Assigned" ? (
+                <>
+                  <Separator />
+                  <h4 className="text-base font-semibold pt-2">
+                    {viewTaskDetailsData.status === "Re Assigned"
+                      ? "Previous Submission / Feedback"
+                      : "Submission Details"}
+                  </h4>
+                  <div className="space-y-3 pl-2 border-l-2">
+                    <div className="space-y-1"></div>
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="details-github-url"
+                        className="flex items-center text-xs font-medium text-muted-foreground"
+                      >
+                        <Github className="w-3.5 h-3.5 mr-1.5" /> GitHub URL
+                      </Label>
+                      {viewTaskDetailsData.gitHubUrl ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            id="details-github-url"
+                            value={viewTaskDetailsData.gitHubUrl}
+                            readOnly
+                            className="font-mono text-xs h-8 flex-1 bg-muted/30 border-none"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() =>
+                              copyToClipboard(
+                                viewTaskDetailsData?.gitHubUrl || ""
+                              )
+                            }
+                            aria-label="Copy GitHub URL"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          No URL provided.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="details-context"
+                        className="flex items-center text-xs font-medium text-muted-foreground"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 mr-1.5" />{" "}
+                        {viewTaskDetailsData.status === "Re Assigned"
+                          ? "Feedback Provided"
+                          : "Explanation/Context"}
+                      </Label>
+                      <Textarea
+                        id="details-context"
+                        value={
+                          viewTaskDetailsData.context ||
+                          (viewTaskDetailsData.status === "Re Assigned"
+                            ? "No feedback recorded."
+                            : "No explanation provided.")
+                        }
+                        readOnly
+                        className={`min-h-[80px] text-sm bg-muted/30 border-none ${viewTaskDetailsData.status === "Re Assigned" ? "border-l-4 border-amber-400 pl-3" : ""}`}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+          <DialogFooter className="pt-4 mt-4 border-t">
+            <Button variant="outline" onClick={handleCloseTaskDetailsDialog}>
               Close
             </Button>
           </DialogFooter>
