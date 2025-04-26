@@ -129,7 +129,7 @@ export default function TeamProjectsPage() {
   );
 
   const viewTasks = (id: string) =>
-    router.push(`/teamData/teamMemberData/ProjectTasks/${id}`);
+    router.push(`/teamData/teamMemberData/TeamMemberProjectTasks/${id}`);
 
   if (loading) {
     return (
