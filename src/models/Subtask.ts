@@ -51,17 +51,23 @@ const subtaskSchema = new Schema<ISubtask>(
 subtaskSchema.pre("save", async function (next) {
   if (!this.isNew) return next();
 
-  const last = await mongoose
+  // Find the last task document and extract its TaskId number
+  const lastTask = await mongoose
     .model<ISubtask>("Subtask")
     .findOne({}, { SubtaskId: 1 })
     .sort({ SubtaskId: -1 });
 
-  let num = 1;
-  if (last?.SubtaskId) {
-    const m = last.SubtaskId.match(/(\d+)$/);
-    num = (m ? parseInt(m[0], 10) : 0) + 1;
+  let newTaskNumber = 1; // Default for the first task
+
+  if (lastTask && lastTask.SubtaskId) {
+    const match = lastTask.SubtaskId.match(/(\d+)$/); // Extract numeric part from TaskId
+    const maxNumber = match ? parseInt(match[0], 10) : 0;
+    newTaskNumber = maxNumber + 1;
   }
-  this.SubtaskId = `Subtask-${String(num).padStart(5, "0")}`;
+
+  const paddedTaskNumber = String(newTaskNumber).padStart(5, "0"); // 4 digits padding
+  this.SubtaskId = `Subtask-${paddedTaskNumber}`;
+
   next();
 });
 
