@@ -123,7 +123,7 @@ export async function GET(
     if (memberIds.length > 0) {
       const memberDocs: IUser[] = await User.find({
         UserId: { $in: memberIds },
-      }).select("UserId firstname lastname email"); // Select needed fields
+      }).select("UserId firstname lastname email profilepic"); // Select needed fields
 
       teamMembers = memberDocs.map((doc) => doc.toObject()); // Convert to plain objects
     }
