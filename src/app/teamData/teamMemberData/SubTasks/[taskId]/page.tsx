@@ -1,5 +1,6 @@
 // src/app/teamData/teamMemberData/SubTasks/[taskId]/page.tsx
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
@@ -8,19 +9,28 @@ import {
   ArrowLeft,
   Filter,
   RefreshCw,
+  Search as SearchIcon,
   Calendar,
   Clock,
   AlertCircle,
   Check,
+  Send,
+  Copy,
+  Info,
   Loader2,
-  UserIcon,
 } from "lucide-react";
-
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
@@ -36,10 +46,29 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader as ADHeader,
+  AlertDialogTitle as ADTitle,
+  AlertDialogDescription as ADDesc,
+  AlertDialogFooter as ADFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+
+interface Member {
+  UserId: string;
+  firstname: string;
+  lastname: string;
+  profilepic: string;
+  email: string;
+}
 
 interface ISubtask {
   SubtaskId: string;
@@ -47,7 +76,7 @@ interface ISubtask {
   description: string;
   deadline: string;
   status: string;
-  assignedTo: string[] | string;
+  assignedMembers: Member[];
   gitHubUrl?: string;
   context?: string;
 }
@@ -57,6 +86,9 @@ interface ITask {
   title: string;
   description?: string;
   deadline?: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ApiResponse {
@@ -75,27 +107,26 @@ export default function TeamMemberSubtasksPage() {
   const [subtasks, setSubtasks] = useState<ISubtask[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
   const [error, setError] = useState("");
   const [showMine, setShowMine] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // submission dialog state
+  const [viewDetails, setViewDetails] = useState<ISubtask | null>(null);
+  const [confirmResubmit, setConfirmResubmit] = useState<ISubtask | null>(null);
   const [selected, setSelected] = useState<ISubtask | null>(null);
+
   const [gitHubUrl, setGitHubUrl] = useState("");
-  const [context, setContext] = useState("");
+  const [contextText, setContextText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!parentTaskId) {
-      setError("Missing Task ID");
-      setLoading(false);
-      return;
-    }
-    if (!loading) setRefreshing(true);
+    if (!parentTaskId) return;
+
     setError("");
     try {
       const res = await fetch(
-        `/api/teamData/teamMemberData/getSubtasks/${parentTaskId}`
+        `/api/teamData/teamMemberData/getsubtasks/${parentTaskId}`
       );
       const data: ApiResponse = await res.json();
       if (!res.ok || !data.success) {
@@ -111,25 +142,12 @@ export default function TeamMemberSubtasksPage() {
       toast.error(msg);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [parentTaskId, loading]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  const filterAndSort = subtasks
-    .filter((st) =>
-      showMine
-        ? Array.isArray(st.assignedTo)
-          ? st.assignedTo.includes(currentUserId)
-          : st.assignedTo === currentUserId
-        : true
-    )
-    .sort(
-      (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-    );
 
   const isOverdue = (d: string) => new Date(d) < new Date();
   const isDueSoon = (d: string) => {
@@ -141,19 +159,25 @@ export default function TeamMemberSubtasksPage() {
     switch (status.toLowerCase()) {
       case "in progress":
         return (
-          <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full flex items-center">
+          <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full flex items-center hover:bg-blue-200">
             <Clock className="mr-1 w-3 h-3" /> In Progress
           </Badge>
         );
       case "completed":
         return (
-          <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full flex items-center">
+          <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full flex items-center hover:bg-green-200">
             <Check className="mr-1 w-3 h-3" /> Completed
           </Badge>
         );
       case "pending":
         return (
-          <Badge className="bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded-full flex items-center">
+          <Badge className="bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded-full flex items-center hover:bg-gray-200">
+            <AlertCircle className="mr-1 w-3 h-3" /> Pending
+          </Badge>
+        );
+      case "re assigned":
+        return (
+          <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full flex items-center hover:bg-gray-200">
             <AlertCircle className="mr-1 w-3 h-3" /> Pending
           </Badge>
         );
@@ -175,20 +199,53 @@ export default function TeamMemberSubtasksPage() {
         return "bg-green-50 border-green-200";
       case "pending":
         return "bg-gray-50 border-gray-200";
+      case "re assigned":
+        return "bg-amber-50 border-amber-200";
       default:
         return "bg-card border";
     }
   };
 
+  const filtered = subtasks
+    .filter((st) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesText =
+        !q ||
+        st.title.toLowerCase().includes(q) ||
+        st.description.toLowerCase().includes(q);
+      const matchesMine = showMine
+        ? st.assignedMembers.some((m) => m.UserId === currentUserId)
+        : true;
+      return matchesText && matchesMine;
+    })
+    .sort(
+      (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+    );
+
+  const openDetails = (st: ISubtask) => setViewDetails(st);
+  const closeDetails = () => setViewDetails(null);
+
+  const handleSubmitClick = (st: ISubtask) => {
+    if (st.gitHubUrl) setConfirmResubmit(st);
+    else openSubmit(st);
+  };
+
+  const cancelResubmit = () => setConfirmResubmit(null);
+  const confirmResubmitAndOpen = () => {
+    if (!confirmResubmit) return;
+    openSubmit(confirmResubmit);
+    setConfirmResubmit(null);
+  };
+
   const openSubmit = (st: ISubtask) => {
     setSelected(st);
     setGitHubUrl(st.gitHubUrl || "");
-    setContext(st.context || "");
+    setContextText(st.context || "");
   };
   const closeSubmit = () => {
     setSelected(null);
     setGitHubUrl("");
-    setContext("");
+    setContextText("");
     setIsSubmitting(false);
   };
 
@@ -201,7 +258,7 @@ export default function TeamMemberSubtasksPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gitHubUrl, context }),
+          body: JSON.stringify({ gitHubUrl, context: contextText }),
         }
       );
       const data = await res.json();
@@ -212,35 +269,42 @@ export default function TeamMemberSubtasksPage() {
       setSubtasks((prev) =>
         prev.map((st) =>
           st.SubtaskId === selected.SubtaskId
-            ? { ...st, status: "In Progress", gitHubUrl, context }
+            ? {
+                ...st,
+                status: "In Progress",
+                gitHubUrl,
+                context: contextText,
+              }
             : st
         )
       );
       closeSubmit();
     } catch (err: any) {
       console.error(err);
-      const msg = err.message || "Submit failed";
-      toast.error(msg);
+      toast.error(err.message || "Submit failed");
       setIsSubmitting(false);
     }
+  };
+
+  const copyToClipboard = (txt?: string) => {
+    if (!txt) return;
+    navigator.clipboard.writeText(txt).then(() => {
+      toast.success("Copied to clipboard");
+    });
   };
 
   if (loading) {
     return (
       <div className="container mx-auto p-4 sm:p-6">
-        <div className="mb-6">
-          <Skeleton className="h-16 w-full rounded-lg mb-4" />
-          <Skeleton className="h-6 w-3/4 mx-auto rounded-lg" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <Skeleton className="h-16 w-full rounded-lg mb-4" />
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-lg" />
+            <Skeleton key={i} className="h-48 w-full rounded-lg" />
           ))}
         </div>
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="container mx-auto p-4 sm:p-6">
@@ -248,125 +312,142 @@ export default function TeamMemberSubtasksPage() {
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <div className="flex justify-center">
-          <Button onClick={fetchData}>Try Again</Button>
-        </div>
+        <Button onClick={fetchData}>Try Again</Button>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6">
-      {/* Header */}
-      <Card className="mb-6 bg-muted/50 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-primary" />
-        <CardHeader>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 h-8 w-8 rounded-full p-0"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <CardTitle className="text-xl sm:text-2xl text-center pt-2">
-            {parentTask?.title || "Task"}
-          </CardTitle>
-          {parentTask?.description && (
-            <p className="text-center text-muted-foreground pt-1 max-w-xl mx-auto">
-              {parentTask.description}
-            </p>
-          )}
-        </CardHeader>
-        {parentTask?.deadline && (
-          <div className="text-xs sm:text-sm text-muted-foreground text-center pb-4 flex items-center justify-center">
-            <Calendar className="w-3 h-3 mr-1 inline" />
-            Deadline: {format(new Date(parentTask.deadline), "PPPp")}
-          </div>
+    <TooltipProvider>
+      <div className="container mx-auto p-4 sm:p-6">
+        {/* Parent Task Info */}
+        {parentTask && (
+          <Card className="mb-6 bg-muted/50">
+            <CardHeader className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.back()}
+                className="absolute top-4 left-4 h-8 w-8 rounded-full p-0"
+                aria-label="Go back"
+              >
+                <ArrowLeft />
+              </Button>
+              <CardTitle className="text-xl sm:text-2xl text-center pt-2">
+                {parentTask.title}
+              </CardTitle>
+              {parentTask.description && (
+                <CardDescription className="text-center text-muted-foreground px-4 pb-4">
+                  {parentTask.description}
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-muted-foreground px-4 pb-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" /> Due:{" "}
+                {parentTask.deadline
+                  ? format(new Date(parentTask.deadline), "PPPp")
+                  : "—"}
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Created:{" "}
+                {format(new Date(parentTask.createdAt), "PPPp")}
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Updated:{" "}
+                {format(new Date(parentTask.updatedAt), "PPPp")}
+              </div>
+              <div className="flex items-center justify-center sm:justify-start">
+                {getStatusBadge(parentTask.status)}
+              </div>
+            </CardContent>
+          </Card>
         )}
-      </Card>
 
-      {/* Actions */}
-      <div className="flex justify-between items-center mb-6">
-        <Button
-          variant={showMine ? "secondary" : "outline"}
-          size="sm"
-          onClick={() => setShowMine((v) => !v)}
-          className="flex items-center"
-        >
-          {showMine ? (
-            <>
+        {/* Search + Filters */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+          <div className="relative w-full sm:w-auto">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Search subtasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-full sm:w-64"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showMine ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowMine((v) => !v)}
+            >
               <Filter className="mr-2 w-4 h-4" />
-              Show All
-            </>
-          ) : (
-            <>
-              <UserIcon className="mr-2 w-4 h-4" />
-              My Subtasks
-            </>
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchData}
-          disabled={refreshing}
-        >
-          <RefreshCw
-            className={`mr-2 w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-          />
-          {refreshing ? "Refreshing" : "Refresh"}
-        </Button>
-      </div>
-
-      {/* Grid */}
-      {filterAndSort.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg bg-card">
-          <p className="text-muted-foreground">
-            {showMine
-              ? "No subtasks assigned to you."
-              : "No subtasks available."}
-          </p>
+              {showMine ? "Show All" : "My Subtasks"}
+            </Button>
+          </div>
         </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filterAndSort.map((st) => (
+
+        {/* Subtask Grid */}
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((st) => (
             <Card
               key={st.SubtaskId}
               className={cn(
-                "border hover:shadow transition-shadow flex flex-col",
+                " relative overflow-hidden rounded-lg shadow hover:shadow-2xl cursor-pointer border flex flex-col group border-l-4 transform hover:-translate-y-1 transition-all duration-300",
                 getBgColor(st.status, st.deadline)
               )}
-              onClick={() =>
-                st.status === "Pending" &&
-                (Array.isArray(st.assignedTo)
-                  ? st.assignedTo.includes(currentUserId)
-                  : st.assignedTo === currentUserId) &&
-                openSubmit(st)
-              }
+              onClick={() => openDetails(st)}
             >
-              <CardHeader className="flex justify-between items-start px-4 pt-4 pb-2">
-                <CardTitle className="text-base font-semibold line-clamp-2">
-                  {st.title}
-                </CardTitle>
-                {getStatusBadge(st.status)}
+              <CardHeader className="px-4 pt-4 pb-2">
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-lg font-semibold line-clamp-2">
+                    {st.title}
+                  </CardTitle>
+                  {getStatusBadge(st.status)}
+                </div>
               </CardHeader>
               <CardContent className="flex-grow px-4 pb-2 text-sm text-muted-foreground">
-                <p className="line-clamp-2 mb-3">{st.description}</p>
+                <p className="line-clamp-3 mb-4">{st.description}</p>
+                <div className="flex -space-x-2 mb-4">
+                  {st.assignedMembers.map((m) => (
+                    <Tooltip key={m.UserId}>
+                      <TooltipTrigger asChild>
+                        <Avatar
+                          className="h-6 w-6 sm:h-8 sm:w-8
+                        ring-2 ring-white"
+                        >
+                          <AvatarImage src={m.profilepic} />
+                          <AvatarFallback>
+                            {m.firstname[0]}
+                            {m.lastname[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="bg-gradient-to-br
+                      from-slate-50 to-slate-100
+                      text-black"
+                      >
+                        <p className="text-sm">
+                          {m.firstname} {m.lastname} <br />
+                          {m.email}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
                 <div
                   className={cn(
-                    "text-xs flex items-center mb-2",
-                    isOverdue(st.deadline) &&
-                      st.status.toLowerCase() !== "completed"
+                    "text-xs flex items-center",
+                    isOverdue(st.deadline)
                       ? "text-red-600"
-                      : isDueSoon(st.deadline) &&
-                          st.status.toLowerCase() !== "completed"
+                      : isDueSoon(st.deadline)
                         ? "text-amber-600"
                         : "text-muted-foreground"
                   )}
                 >
-                  <Calendar className="mr-1 w-3 h-3" />
+                  <Calendar className="mr-1 w-4 h-4" />
                   {isOverdue(st.deadline)
                     ? "Overdue: "
                     : isDueSoon(st.deadline)
@@ -374,67 +455,203 @@ export default function TeamMemberSubtasksPage() {
                       : "Due: "}
                   {format(new Date(st.deadline), "PPP")}
                 </div>
-                {st.status === "Pending" &&
-                  (Array.isArray(st.assignedTo)
-                    ? st.assignedTo.includes(currentUserId)
-                    : st.assignedTo === currentUserId) && (
-                    <p className="mt-1 text-xs text-blue-600">
-                      (click to Submit)
-                    </p>
-                  )}
               </CardContent>
+              <CardFooter className="px-4 pt-2 pb-4 flex justify-end items-center">
+                {st.assignedMembers.some((m) => m.UserId === currentUserId) && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation(), handleSubmitClick(st);
+                    }}
+                    aria-label="Submit Subtask"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                )}
+              </CardFooter>
             </Card>
           ))}
         </div>
-      )}
 
-      {/* Submit Dialog */}
-      <Dialog open={!!selected} onOpenChange={(open) => !open && closeSubmit()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Submit: {selected?.title}</DialogTitle>
-            <DialogDescription>
-              Enter your GitHub URL & context
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="github-url">GitHub URL</Label>
-              <Input
-                id="github-url"
-                value={gitHubUrl}
-                onChange={(e) => setGitHubUrl(e.target.value)}
-                placeholder="https://github.com/your/repo"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="context">Context / Notes</Label>
-              <Textarea
-                id="context"
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-                placeholder="Any additional notes..."
-              />
-            </div>
-          </div>
-          <DialogFooter className="flex justify-end space-x-2">
-            <DialogClose asChild>
-              <Button variant="outline" disabled={isSubmitting}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !gitHubUrl}
-            >
-              {isSubmitting && (
-                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+        {/* DETAILS DIALOG */}
+        <Dialog
+          open={!!viewDetails}
+          onOpenChange={(open) => !open && closeDetails()}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Subtask: {viewDetails?.title}</DialogTitle>
+              <DialogDescription>
+                All details for this subtask
+              </DialogDescription>
+            </DialogHeader>
+            {viewDetails && (
+              <div className="space-y-4 py-2 text-sm">
+                <div>
+                  <Label>Description</Label>
+                  <p>{viewDetails.description}</p>
+                </div>
+                <div>
+                  <Label>Deadline</Label>
+                  <p>{format(new Date(viewDetails.deadline), "PPPp")}</p>
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <p>{viewDetails.status}</p>
+                </div>
+                <div>
+                  <Label>Assigned To</Label>
+                  <div className="flex items-center space-x-2 mt-1">
+                    {viewDetails.assignedMembers.map((m) => (
+                      <div
+                        key={m.UserId}
+                        className="flex items-center space-x-2"
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage
+                            src={m.profilepic}
+                            alt={`${m.firstname} ${m.lastname}`}
+                          />
+                          <AvatarFallback>
+                            {m.firstname[0]}
+                            {m.lastname[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>
+                          {m.firstname} {m.lastname}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {viewDetails.gitHubUrl && (
+                  <div>
+                    <Label>Submitted URL</Label>
+                    <div className="flex items-center space-x-2">
+                      <a
+                        href={viewDetails.gitHubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline break-all"
+                      >
+                        {viewDetails.gitHubUrl}
+                      </a>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(viewDetails.gitHubUrl)}
+                        aria-label="Copy URL"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {viewDetails.context && (
+                  <div>
+                    <Label>Context / Notes</Label>
+                    <Textarea
+                      readOnly
+                      value={viewDetails.context}
+                      className="bg-muted/30 border-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter className="flex justify-end space-x-2">
+              <DialogClose asChild>
+                <Button variant="outline">Close</Button>
+              </DialogClose>
+              {viewDetails?.assignedMembers.some(
+                (m) => m.UserId === currentUserId
+              ) && (
+                <Button onClick={() => handleSubmitClick(viewDetails)}>
+                  {viewDetails.gitHubUrl ? "Resubmit" : "Submit"}
+                </Button>
               )}
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* RESUBMIT CONFIRMATION */}
+        <AlertDialog
+          open={!!confirmResubmit}
+          onOpenChange={(open) => !open && cancelResubmit()}
+        >
+          <AlertDialogContent>
+            <ADHeader>
+              <ADTitle>Resubmit Subtask?</ADTitle>
+              <ADDesc>
+                You already submitted this subtask. Submitting again will
+                overwrite your current submission. Continue?
+              </ADDesc>
+            </ADHeader>
+            <ADFooter>
+              <AlertDialogCancel onClick={cancelResubmit}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmResubmitAndOpen}>
+                Continue
+              </AlertDialogAction>
+            </ADFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* SUBMIT FORM */}
+        <Dialog
+          open={!!selected}
+          onOpenChange={(open) => !open && closeSubmit()}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {selected?.gitHubUrl ? "Resubmit" : "Submit"}: {selected?.title}
+              </DialogTitle>
+              <DialogDescription>
+                Provide your GitHub URL & context
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="github-url">GitHub URL</Label>
+                <Input
+                  id="github-url"
+                  value={gitHubUrl}
+                  onChange={(e) => setGitHubUrl(e.target.value)}
+                  placeholder="https://github.com/..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="context">Context / Notes</Label>
+                <Textarea
+                  id="context"
+                  value={contextText}
+                  onChange={(e) => setContextText(e.target.value)}
+                  placeholder="Any additional notes..."
+                />
+              </div>
+            </div>
+            <DialogFooter className="flex justify-end space-x-2">
+              <DialogClose asChild>
+                <Button variant="outline" disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !gitHubUrl}
+              >
+                {isSubmitting && (
+                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                )}
+                Submit
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 }

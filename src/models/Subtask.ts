@@ -31,7 +31,7 @@ const subtaskSchema = new Schema<ISubtask>(
     deadline: { type: Date, required: [true, "Deadline is required"] },
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Completed"],
+      enum: ["Pending", "In Progress", "Completed", "Re Assigned"],
       default: "Pending",
     },
     gitHubUrl: {

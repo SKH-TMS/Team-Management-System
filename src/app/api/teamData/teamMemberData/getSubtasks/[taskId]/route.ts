@@ -1,14 +1,20 @@
-// src/app/api/teamData/teamMemberData/getSubtasks/[taskId]/route.ts
+// src/app/api/teamData/teamMemberData/getsubtasks/[taskId]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Task, { ITask } from "@/models/Task";
 import Subtask, { ISubtask } from "@/models/Subtask";
-import AssignedProjectLog, {
-  IAssignedProjectLog,
-} from "@/models/AssignedProjectLogs";
+import AssignedProjectLog from "@/models/AssignedProjectLogs";
 import Team, { ITeam } from "@/models/Team";
+import User, { IUser } from "@/models/User";
 import { getToken, GetUserId } from "@/utils/token";
+
+export type MemberInfo = {
+  UserId: string;
+  firstname: string;
+  lastname: string;
+  profilepic: string;
+};
 
 export async function GET(
   req: NextRequest,
@@ -18,108 +24,111 @@ export async function GET(
     const parentTaskId = params.taskId;
     if (!parentTaskId) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Bad Request: TaskId is missing in URL.",
-        },
+        { success: false, message: "Missing taskId" },
         { status: 400 }
       );
     }
 
-    // Authentication
+    // 1. Auth
     const token = await getToken(req);
-    if (!token) {
+    if (!token)
       return NextResponse.json(
-        { success: false, message: "Unauthorized: No token provided." },
+        { success: false, message: "Unauthorized" },
         { status: 401 }
       );
-    }
     const userId = await GetUserId(token);
-    if (!userId) {
+    if (!userId)
       return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized: Invalid token or user not found.",
-        },
+        { success: false, message: "Unauthorized" },
         { status: 401 }
       );
-    }
 
-    // Connect to DB
+    // 2. DB
     await connectToDatabase();
-    console.log(parentTaskId);
-    // 1. Fetch parent task
-    const parentTaskDoc = await Task.findOne({ TaskId: parentTaskId }).select(
-      "TaskId title description deadline status createdAt updatedAt"
-    );
-    if (!parentTaskDoc) {
+
+    // 3. Parent task
+    const parentTask = await Task.findOne({ TaskId: parentTaskId })
+      .select("TaskId title description deadline status createdAt updatedAt")
+      .lean<ITask>();
+    if (!parentTask) {
       return NextResponse.json(
-        { success: false, message: "Not Found: Task not found." },
+        { success: false, message: "Task not found" },
         { status: 404 }
       );
     }
 
-    // 2. Find the assignment log that includes this task
+    // 4. Assignment log
     const log = await AssignedProjectLog.findOne({
       tasksIds: parentTaskId,
-    }).select("teamId");
+    }).lean<{
+      teamId: string;
+    }>();
     if (!log) {
-      console.error(`Assignment log missing for TaskId=${parentTaskId}`);
       return NextResponse.json(
-        {
-          success: false,
-          message: "Internal Error: Could not find assignment for this task.",
-        },
+        { success: false, message: "Assignment not found" },
         { status: 500 }
       );
     }
 
-    // 3. Fetch the team
-    const team = await Team.findOne({ teamId: log.teamId });
-    if (!team) {
-      console.error(
-        `Team missing for teamId=${log.teamId} in log for TaskId=${parentTaskId}`
-      );
+    // 5. Team membership
+    const team = await Team.findOne({ teamId: log.teamId })
+      .select("members")
+      .lean<Pick<ITeam, "members">>();
+    if (!team || !team.members.includes(userId)) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Internal Error: Could not find team details.",
-        },
-        { status: 500 }
-      );
-    }
-
-    // 4. Authorization: ensure current user is a team member
-    if (!team.members.includes(userId)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Forbidden: You are not a member of the team assigned to this task.",
-        },
+        { success: false, message: "Forbidden" },
         { status: 403 }
       );
     }
 
-    // 5. Fetch subtasks
-    const subtaskDocs = await Subtask.find({
-      parentTaskId: parentTaskId,
-    }).sort({ deadline: 1 });
+    // 6. Load subtasks
+    const subtaskDocs = await Subtask.find({ parentTaskId }).sort({
+      deadline: 1,
+    });
 
-    // 6. Respond
+    // 7. Gather all assigned userIds
+    const assignSet = new Set<string>();
+    subtaskDocs.forEach((doc: ISubtask) => {
+      const arr = Array.isArray(doc.assignedTo)
+        ? doc.assignedTo
+        : [doc.assignedTo];
+      arr.forEach((uid: string) => assignSet.add(uid));
+    });
+
+    // 8. Fetch members
+    let membersInfo: MemberInfo[] = [];
+    if (assignSet.size > 0) {
+      const users = await User.find({
+        UserId: { $in: Array.from(assignSet) },
+      }).select("UserId firstname lastname profilepic email");
+      membersInfo = users.map((u: IUser) => ({
+        UserId: u.UserId,
+        firstname: u.firstname,
+        lastname: u.lastname,
+        email: u.email,
+        profilepic: u.profilepic.toString(),
+      }));
+    }
+
+    // 9. Build final array
+    const subtasks = subtaskDocs.map((doc: ISubtask) => {
+      const s = doc.toObject() as ISubtask;
+      const arr = Array.isArray(s.assignedTo) ? s.assignedTo : [s.assignedTo];
+      const assignedMembers = membersInfo.filter((m) => arr.includes(m.UserId));
+      return { ...s, assignedMembers };
+    });
+
+    // 10. Return
     return NextResponse.json({
       success: true,
-      parentTask: parentTaskDoc.toObject(),
-      subtasks: subtaskDocs.map((s) => s.toObject()),
+      parentTask,
+      subtasks,
       currentUserId: userId,
     });
   } catch (err: any) {
-    console.error("Error in teamMember getSubtasks:", err);
+    console.error("Error in getsubtasks:", err);
     return NextResponse.json(
-      {
-        success: false,
-        message: err.message || "Failed to fetch subtasks.",
-      },
+      { success: false, message: err.message || "Server error" },
       { status: 500 }
     );
   }
