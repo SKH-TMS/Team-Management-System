@@ -44,8 +44,8 @@ export default function SidebarTeam() {
       Icon: Users,
     });
     menuItems.push({
-      title: "Create Task",
-      path: "/teamData/teamLeaderData/CreateTask",
+      title: "Quick Subtask",
+      path: "/teamData/teamLeaderData/QuickCreateSubtask",
       Icon: ClipboardPlus,
     });
   }
