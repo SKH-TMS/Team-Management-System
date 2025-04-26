@@ -77,6 +77,7 @@ import {
   FileEdit,
   AlertTriangle,
   RefreshCw, // Added icons
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +88,7 @@ interface ISubtask {
   parentTaskId: string;
   title: string;
   description: string;
-  assignedTo: string; // UserID
+  assignedTo: string | string[]; // UserID or array of UserIDs
   deadline: string; // ISO String or Date
   status: string;
   gitHubUrl?: string;
@@ -119,14 +120,14 @@ interface Member {
 // --- Subtask Card Component (Placeholder - Extract Later) ---
 interface SubtaskCardProps {
   subtask: ISubtask;
-  assignee?: Member | null;
+  assignees: Member[]; // Changed to array of assignees
   onClick: (subtask: ISubtask) => void;
   onUpdate: (subtaskId: string) => void;
 }
 
 function SubtaskCard({
   subtask,
-  assignee,
+  assignees,
   onClick,
   onUpdate,
 }: SubtaskCardProps) {
@@ -170,6 +171,7 @@ function SubtaskCard({
         );
     }
   };
+
   const getBgColor = () => {
     switch (subtask.status?.toLowerCase()) {
       case "in progress":
@@ -213,36 +215,49 @@ function SubtaskCard({
           <Calendar className="w-4 h-4 mr-1.5" />
           Due: {format(new Date(subtask.deadline), "PP")}
         </div>
-        <div className="flex items-center text-xs sm:text-sm text-muted-foreground pt-1">
-          <User className="w-4 h-4 mr-1.5" />
-          Assignee:
-          {assignee ? (
-            <TooltipProvider delayDuration={100}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1.5 ml-1.5">
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage
-                        src={assignee.profilepic}
-                        alt={assignee.firstname}
-                      />
-                      <AvatarFallback className="text-[10px]">
-                        {getInitials(assignee.firstname, assignee.lastname)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="font-medium text-foreground truncate">
-                      {assignee.firstname} {assignee.lastname}
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{assignee.email}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        <div className="flex items-start text-xs sm:text-sm text-muted-foreground pt-1">
+          {assignees.length > 1 ? (
+            <Users className="w-4 h-4 mr-1.5 mt-0.5" />
           ) : (
-            <span className="ml-1.5 italic">N/A</span>
+            <User className="w-4 h-4 mr-1.5 mt-0.5" />
           )}
+          <div className="flex flex-col">
+            <span>{assignees.length > 1 ? "Assignees:" : "Assignee:"}</span>
+            {assignees.length > 0 ? (
+              <div className="flex flex-col gap-1.5 mt-1">
+                {assignees.map((assignee) => (
+                  <TooltipProvider key={assignee.UserId} delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1.5">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage
+                              src={assignee.profilepic ?? ""}
+                              alt={`${assignee.firstname} ${assignee.lastname}`}
+                            />
+                            <AvatarFallback className="text-[10px]">
+                              {getInitials(
+                                assignee.firstname,
+                                assignee.lastname
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium text-foreground truncate">
+                            {assignee.firstname} {assignee.lastname}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{assignee.email}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            ) : (
+              <span className="ml-1.5 italic">N/A</span>
+            )}
+          </div>
         </div>
       </CardContent>
       <CardFooter className="pt-2 pb-3 px-3 sm:px-4 flex justify-end items-center">
@@ -298,6 +313,22 @@ export default function SubTasksPage() {
   const [isProcessingStatusChange, setIsProcessingStatusChange] =
     useState(false); // Loading state for status buttons
 
+  // Helper function to get assignees for a subtask
+  const getAssigneesForSubtask = useCallback(
+    (subtask: ISubtask): Member[] => {
+      // Handle if assignedTo is a string or an array
+      const assignedIds = Array.isArray(subtask.assignedTo)
+        ? subtask.assignedTo
+        : [subtask.assignedTo];
+
+      // Find all team members who are assigned to this subtask
+      return teamMembers.filter((member) =>
+        assignedIds.includes(member.UserId)
+      );
+    },
+    [teamMembers]
+  );
+
   // Fetch Subtasks and Parent Task Info
   const fetchSubtaskData = useCallback(async () => {
     if (!parentTaskId) {
@@ -315,6 +346,14 @@ export default function SubTasksPage() {
       const data = await response.json();
       if (!response.ok || !data.success)
         throw new Error(data.message || "Failed to fetch subtasks.");
+
+      // Debug log to inspect the response data
+      console.log("API Response:", {
+        parentTask: data.parentTask,
+        subtasks: data.subtasks,
+        teamMembers: data.teamMembers,
+      });
+
       setParentTask(data.parentTask || null);
       setSubtasks(data.subtasks || []);
       setTeamMembers(data.teamMembers || []);
@@ -454,23 +493,38 @@ export default function SubTasksPage() {
     setStatusFilter("all");
     setAssigneeFilter("all");
   };
+
   const filteredAndSortedSubtasks = subtasks
     .filter((subtask) => {
       const lowerSearchQuery = searchQuery.toLowerCase();
-      const assignee = teamMembers.find((m) => m.UserId === subtask.assignedTo);
-      const assigneeName = assignee
-        ? `${assignee.firstname} ${assignee.lastname}`.toLowerCase()
-        : "";
+
+      // Get all assignees for this subtask
+      const subtaskAssignees = getAssigneesForSubtask(subtask);
+
+      // Check if any assignee name matches the search query
+      const assigneeNames = subtaskAssignees.map((assignee) =>
+        `${assignee.firstname} ${assignee.lastname}`.toLowerCase()
+      );
+
       const matchesSearch =
         searchQuery === "" ||
         subtask.title.toLowerCase().includes(lowerSearchQuery) ||
         subtask.description.toLowerCase().includes(lowerSearchQuery) ||
-        assigneeName.includes(lowerSearchQuery);
+        assigneeNames.some((name) => name.includes(lowerSearchQuery));
+
+      // Check if the subtask has the filtered status
       const matchesStatus =
         statusFilter === "all" ||
         subtask.status.toLowerCase() === statusFilter.toLowerCase();
+
+      // Check if the subtask has the filtered assignee
+      const assignedIds = Array.isArray(subtask.assignedTo)
+        ? subtask.assignedTo
+        : [subtask.assignedTo];
+
       const matchesAssignee =
-        assigneeFilter === "all" || subtask.assignedTo === assigneeFilter;
+        assigneeFilter === "all" || assignedIds.includes(assigneeFilter);
+
       return matchesSearch && matchesStatus && matchesAssignee;
     })
     .sort((a, b) => {
@@ -599,14 +653,14 @@ export default function SubTasksPage() {
           className={`grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`}
         >
           {filteredAndSortedSubtasks.map((subtask) => {
-            const assignee = teamMembers.find(
-              (m) => m.UserId === subtask.assignedTo
-            );
+            // Get all assignees for this subtask
+            const assignees = getAssigneesForSubtask(subtask);
+
             return (
               <SubtaskCard
                 key={subtask.SubtaskId}
                 subtask={subtask}
-                assignee={assignee}
+                assignees={assignees}
                 onClick={handleOpenDetailsDialog}
                 onUpdate={handleNavigateToUpdate}
               />
@@ -633,20 +687,53 @@ export default function SubTasksPage() {
             <div className="space-y-4 py-4 text-sm">
               {/* Display Subtask Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                {/* Assignee, Deadline, Status, Last Updated */}
-                <div className="space-y-1">
+                {/* Assignees Section */}
+                <div className="space-y-1 md:col-span-2">
                   <Label className="flex items-center text-xs font-medium text-muted-foreground">
-                    <User className="w-3.5 h-3.5 mr-1.5" /> Assignee
+                    {Array.isArray(viewSubtaskDetailsData.assignedTo) &&
+                    viewSubtaskDetailsData.assignedTo.length > 1 ? (
+                      <Users className="w-3.5 h-3.5 mr-1.5" />
+                    ) : (
+                      <User className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {Array.isArray(viewSubtaskDetailsData.assignedTo) &&
+                    viewSubtaskDetailsData.assignedTo.length > 1
+                      ? "Assignees"
+                      : "Assignee"}
                   </Label>
-                  <p>
-                    {teamMembers.find(
-                      (m) => m.UserId === viewSubtaskDetailsData.assignedTo
-                    )?.firstname ?? "N/A"}{" "}
-                    {teamMembers.find(
-                      (m) => m.UserId === viewSubtaskDetailsData.assignedTo
-                    )?.lastname ?? ""}
-                  </p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {getAssigneesForSubtask(viewSubtaskDetailsData).length >
+                    0 ? (
+                      getAssigneesForSubtask(viewSubtaskDetailsData).map(
+                        (member) => (
+                          <div
+                            key={member.UserId}
+                            className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md"
+                          >
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage
+                                src={member.profilepic ?? ""}
+                                alt={`${member.firstname} ${member.lastname}`}
+                              />
+                              <AvatarFallback className="text-[10px]">
+                                {member.firstname.charAt(0)}
+                                {member.lastname.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>
+                              {member.firstname} {member.lastname}
+                            </span>
+                          </div>
+                        )
+                      )
+                    ) : (
+                      <span className="italic text-muted-foreground">
+                        No assignees set
+                      </span>
+                    )}
+                  </div>
                 </div>
+
                 <div className="space-y-1">
                   <Label className="flex items-center text-xs font-medium text-muted-foreground">
                     <Calendar className="w-3.5 h-3.5 mr-1.5" /> Deadline

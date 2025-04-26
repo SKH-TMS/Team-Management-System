@@ -4,16 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import Task, { ITask } from "@/models/Task";
-import Subtask, { ISubtask } from "@/models/Subtask";
+import Subtask, { ISubtask } from "@/models/Subtask"; // Ensure ISubtask has assignedTo: string[]
 import AssignedProjectLog, {
   IAssignedProjectLog,
 } from "@/models/AssignedProjectLogs";
 import Team, { ITeam } from "@/models/Team";
+import User from "@/models/User"; // Needed for finding members if adding to title
 import { getToken, GetUserId } from "@/utils/token";
 
 // Zod schema for input validation
 const CreateSubtaskSchema = z.object({
-  parentTaskId: z.string().min(1),
+  parentTaskId: z.string().min(1, { message: "Parent Task ID is required." }),
   title: z
     .string()
     .trim()
@@ -22,57 +23,79 @@ const CreateSubtaskSchema = z.object({
     .string()
     .trim()
     .min(10, { message: "Description must be at least 10 characters." }),
-  assignedTo: z.string().min(1, { message: "Assignee is required." }), // UserID
-  deadline: z.string().datetime({ message: "Invalid deadline format." }),
+  assignedTo: z
+    .string()
+    .min(1, {
+      message: "Assignee selection ('__all__' or UserID) is required.",
+    }), // Still expect string from form
+  deadline: z
+    .string()
+    .datetime({ message: "Invalid deadline format (ISO string expected)." }),
 });
 
 export async function POST(req: NextRequest) {
-  let createdSubtask: ISubtask | null = null; // For potential rollback
+  const createdSubtaskIds: string[] = []; // Track created IDs for potential rollback
+  let parentTaskToUpdate: ITask | null = null;
 
   try {
-    // Authentication & Authorization
+    // 1. Authentication & Authorization
     const token = await getToken(req);
     if (!token)
       return NextResponse.json(
         { success: false, message: "Unauthorized." },
         { status: 401 }
       );
-    const userId = await GetUserId(token);
+    const userId = await GetUserId(token); // Team Leader's ID
     if (!userId)
       return NextResponse.json(
         { success: false, message: "Unauthorized." },
         { status: 401 }
       );
 
-    // Parse and Validate Request Body
-    const body = await req.json();
+    // 2. Parse and Validate Request Body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return NextResponse.json(
+        { success: false, message: "Bad Request: Invalid JSON format." },
+        { status: 400 }
+      );
+    }
+
     const validationResult = CreateSubtaskSchema.safeParse(body);
 
     if (!validationResult.success) {
       const errorMessages = validationResult.error.errors
-        .map((err) => err.message)
-        .join(", ");
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join("; ");
       return NextResponse.json(
         { success: false, message: `Validation Error: ${errorMessages}` },
         { status: 400 }
       );
     }
-    const { parentTaskId, title, description, assignedTo, deadline } =
-      validationResult.data;
 
+    // --- FIX: Access data safely after validation success ---
+    const {
+      parentTaskId,
+      title,
+      description,
+      assignedTo: assignedToValue,
+      deadline,
+    } = validationResult.data;
+    // --- End Fix ---
+
+    // 3. Database Connection
     await connectToDatabase();
 
-    // Find Parent Task
-    const parentTask: ITask | null = await Task.findOne({
-      TaskId: parentTaskId,
-    });
-    if (!parentTask)
+    // 4. Find Parent Task, Log, Team, Verify Leadership
+    parentTaskToUpdate = await Task.findOne({ TaskId: parentTaskId });
+    if (!parentTaskToUpdate)
       return NextResponse.json(
         { success: false, message: "Parent task not found." },
         { status: 404 }
       );
 
-    // Find Assignment Log & Team
     const log: IAssignedProjectLog | null = await AssignedProjectLog.findOne({
       tasksIds: parentTaskId,
     });
@@ -89,7 +112,6 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
 
-    // Verify Leadership
     if (!team.teamLeader || !team.teamLeader.includes(userId)) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Not team leader." },
@@ -97,54 +119,88 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify Assignee is in the team
-    if (!team.members || !team.members.includes(assignedTo)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bad Request: Assigned user is not part of this team.",
-        },
-        { status: 400 }
-      );
+    // 5. Prepare Data
+    const deadlineDate = new Date(deadline);
+    const teamMemberIds = team.members?.filter((id) => id !== userId) || [];
+
+    // 6. Handle Assignment Logic
+    let assigneesForDb: string[] = [];
+    let message = ""; // Initialize message variable
+
+    if (assignedToValue === "__all__") {
+      // --- Assign to All Members ---
+      if (teamMemberIds.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "No other members found in the team to assign tasks to.",
+          },
+          { status: 400 }
+        );
+      }
+      assigneesForDb = teamMemberIds;
+      message = `Subtask created and assigned to ${assigneesForDb.length} members!`;
+    } else {
+      // --- Assign to Single Member ---
+      const singleAssigneeId = assignedToValue;
+      if (!team.members || !team.members.includes(singleAssigneeId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Bad Request: Assigned user is not part of this team.",
+          },
+          { status: 400 }
+        );
+      }
+      assigneesForDb = [singleAssigneeId];
+      message = "Subtask created successfully!";
     }
 
-    // Create New Subtask
+    // 7. Create ONE New Subtask
     const newSubtask = new Subtask({
       parentTaskId,
       title,
       description,
-      assignedTo,
-      deadline: new Date(deadline),
-      status: "Pending", // Initial status
-      // submittedBy: "Not-submitted" // Default is set in schema
+      assignedTo: assigneesForDb, // Assign the array
+      deadline: deadlineDate,
+      status: "Pending",
     });
 
-    createdSubtask = await newSubtask.save();
-    if (!createdSubtask || !createdSubtask.SubtaskId) {
+    const savedSubtask = await newSubtask.save();
+    if (!savedSubtask || !savedSubtask.SubtaskId) {
       throw new Error("Subtask creation failed unexpectedly after save.");
     }
+    const createdSubtaskId = savedSubtask.SubtaskId; // Assign ID for rollback tracking
 
-    // Update Parent Task's subTasks array
-    parentTask.subTasks = parentTask.subTasks || [];
-    parentTask.subTasks.push(createdSubtask.SubtaskId);
-    await parentTask.save();
+    // 8. Update Parent Task's subTasks array
+    parentTaskToUpdate.subTasks = parentTaskToUpdate.subTasks || [];
+    parentTaskToUpdate.subTasks.push(savedSubtask.SubtaskId);
+    await parentTaskToUpdate.save();
 
-    // Success Response
+    // 9. Success Response
     return NextResponse.json({
       success: true,
-      message: "Subtask created successfully!",
-      subtask: createdSubtask.toObject(),
+      message: message, // Use the determined message
+      subtask: savedSubtask.toObject(),
     });
   } catch (error) {
     console.error("Error creating subtask:", error);
-
-    // Rollback: Delete subtask if parent update failed
-    if (createdSubtask && createdSubtask.SubtaskId) {
+    // Rollback Logic: Attempt to delete the subtask if created
+    // Use createdSubtaskId which is now correctly scoped
+    if (createdSubtaskIds) {
+      // Check if an ID was actually assigned before trying rollback
       try {
-        await Subtask.deleteOne({ SubtaskId: createdSubtask.SubtaskId });
-        console.log(
-          `Rolled back subtask ${createdSubtask.SubtaskId} due to error.`
-        );
+        await Subtask.deleteOne({ SubtaskId: createdSubtaskIds });
+        console.log(`Rolled back subtask ${createdSubtaskIds} due to error.`);
+        if (parentTaskToUpdate && parentTaskToUpdate.TaskId) {
+          await Task.updateOne(
+            { TaskId: parentTaskToUpdate.TaskId },
+            { $pull: { subTasks: createdSubtaskIds } }
+          );
+          console.log(
+            `Attempted to rollback subtask ID from parent task ${parentTaskToUpdate.TaskId}.`
+          );
+        }
       } catch (rollbackError) {
         console.error(
           "CRITICAL: Error during subtask rollback:",
@@ -152,14 +208,21 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-
-    let message = "Failed to create subtask.";
+    // Error Response
+    let responseMessage =
+      "Failed to create subtask(s). An internal error occurred.";
+    let statusCode = 500;
     if (error instanceof Error) {
       console.error(`Specific error: ${error.message}`);
+      if ((error as any).code === 11000) {
+        responseMessage =
+          "Failed to create subtask due to a duplicate ID conflict. Please try again.";
+        statusCode = 409;
+      }
     }
     return NextResponse.json(
-      { success: false, message: message },
-      { status: 500 }
+      { success: false, message: responseMessage },
+      { status: statusCode }
     );
   }
 }

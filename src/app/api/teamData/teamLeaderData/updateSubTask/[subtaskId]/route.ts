@@ -4,17 +4,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import Subtask, { ISubtask } from "@/models/Subtask";
-import Task from "@/models/Task";
-import AssignedProjectLog from "@/models/AssignedProjectLogs";
-import Team, { ITeam } from "@/models/Team";
+import Task from "@/models/Task"; // Needed for auth check
+import AssignedProjectLog, {
+  IAssignedProjectLog,
+} from "@/models/AssignedProjectLogs"; // Needed for auth check
+import Team, { ITeam } from "@/models/Team"; // Needed for auth check
 import { getToken, GetUserId } from "@/utils/token";
 
-// Zod schema for update payload
+// Zod schema for update payload validation
 const UpdateSubtaskPayloadSchema = z.object({
-  title: z.string().trim().min(3),
-  description: z.string().trim().min(10),
-  assignedTo: z.string().min(1), // UserID
-  deadline: z.string().datetime(),
+  title: z
+    .string()
+    .trim()
+    .min(3, { message: "Title must be at least 3 characters." }),
+  description: z
+    .string()
+    .trim()
+    .min(10, { message: "Description must be at least 10 characters." }),
+  assignedTo: z
+    .array(z.string().min(1)) // Expect array of UserIDs
+    .min(1, { message: "At least one assignee is required." }),
+  deadline: z
+    .string()
+    .datetime({ message: "Invalid deadline format (ISO string expected)." }),
 });
 
 export async function PUT( // Using PUT for update
@@ -22,132 +34,210 @@ export async function PUT( // Using PUT for update
   { params }: { params: { subtaskId: string } }
 ) {
   try {
+    // 1. Extract Subtask ID
     const { subtaskId } = params;
-    if (!subtaskId)
+    if (!subtaskId) {
       return NextResponse.json(
-        { success: false, message: "Bad Request: Subtask ID missing." },
-        { status: 400 }
-      );
-
-    // Auth
-    const token = await getToken(req);
-    if (!token)
-      return NextResponse.json(
-        { success: false, message: "Unauthorized." },
-        { status: 401 }
-      );
-    const userId = await GetUserId(token);
-    if (!userId)
-      return NextResponse.json(
-        { success: false, message: "Unauthorized." },
-        { status: 401 }
-      );
-
-    // Validate Body
-    const body = await req.json();
-    const validationResult = UpdateSubtaskPayloadSchema.safeParse(body);
-    if (!validationResult.success) {
-      const errors = validationResult.error.errors
-        .map((e) => e.message)
-        .join(", ");
-      return NextResponse.json(
-        { success: false, message: `Validation Error: ${errors}` },
+        {
+          success: false,
+          message: "Bad Request: Subtask ID is missing in URL.",
+        },
         { status: 400 }
       );
     }
-    const { title, description, assignedTo, deadline } = validationResult.data;
 
+    // 2. Authentication & Authorization
+    const token = await getToken(req);
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized: No token provided." },
+        { status: 401 }
+      );
+    }
+    const userId = await GetUserId(token); // Team Leader's ID
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized: User ID not found in token.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // 3. Parse and Validate Request Body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { success: false, message: "Bad Request: Invalid JSON format." },
+        { status: 400 }
+      );
+    }
+
+    const validationResult = UpdateSubtaskPayloadSchema.safeParse(body);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join("; ");
+      return NextResponse.json(
+        { success: false, message: `Validation Error: ${errorMessages}` },
+        { status: 400 }
+      );
+    }
+    // Destructure validated data
+    const {
+      title,
+      description,
+      assignedTo: newAssigneeIds,
+      deadline,
+    } = validationResult.data;
+
+    // 4. Database Connection
     await connectToDatabase();
 
-    // Find Subtask
+    // 5. Find the Subtask to Update
     const subtask: ISubtask | null = await Subtask.findOne({
       SubtaskId: subtaskId,
     });
-    if (!subtask)
+    if (!subtask) {
       return NextResponse.json(
         { success: false, message: "Subtask not found." },
         { status: 404 }
       );
+    }
 
-    // Find Parent Task -> Log -> Team for Auth and Member Verification
-    const parentTask = await Task.findOne({ TaskId: subtask.parentTaskId });
-    if (!parentTask)
+    // 6. Authorization Check: Verify user leads the team associated with the parent task
+    const parentTask = await Task.findOne({
+      TaskId: subtask.parentTaskId,
+    }).select("TaskId");
+    if (!parentTask) {
+      console.error(
+        `Data Integrity Issue: Subtask ${subtaskId} exists but parent task ${subtask.parentTaskId} not found.`
+      );
       return NextResponse.json(
-        { success: false, message: "Parent task not found." },
+        {
+          success: false,
+          message: "Parent task associated with this subtask not found.",
+        },
         { status: 404 }
       );
+    }
+
     const log = await AssignedProjectLog.findOne({
       tasksIds: parentTask.TaskId,
-    });
-    if (!log)
-      return NextResponse.json(
-        { success: false, message: "Assignment log not found." },
-        { status: 404 }
+    }).select("teamId AssignProjectId");
+    if (!log) {
+      console.error(
+        `Data Integrity Issue: Parent Task ${parentTask.TaskId} found but no corresponding assignment log.`
       );
-    const team: ITeam | null = await Team.findOne({ teamId: log.teamId });
-    if (!team)
       return NextResponse.json(
-        { success: false, message: "Team not found." },
-        { status: 404 }
+        {
+          success: false,
+          message: "Assignment log for the parent task not found.",
+        },
+        { status: 500 }
       );
+    }
 
-    // Verify Leadership
+    const team: ITeam | null = await Team.findOne({ teamId: log.teamId });
+    if (!team) {
+      console.error(
+        `Data Integrity Issue: Assignment log ${log.AssignProjectId} found but no corresponding team ${log.teamId}.`
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Team associated with this subtask not found.",
+        },
+        { status: 500 }
+      );
+    }
+
     if (!team.teamLeader || !team.teamLeader.includes(userId)) {
       return NextResponse.json(
-        { success: false, message: "Forbidden: Not team leader." },
+        {
+          success: false,
+          message: "Forbidden: You are not the leader for this subtask's team.",
+        },
         { status: 403 }
       );
     }
 
-    // Verify Assignee is in the team
-    if (!team.members || !team.members.includes(assignedTo)) {
+    // 7. Verify ALL new Assignees are valid members of the team
+    const teamMemberIds = team.members || [];
+    const invalidAssignees = newAssigneeIds.filter(
+      (id) => !teamMemberIds.includes(id)
+    );
+    if (invalidAssignees.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "Bad Request: Assigned user is not part of this team.",
+          message: `Bad Request: The following assigned user IDs are not part of this team: ${invalidAssignees.join(", ")}.`,
         },
         { status: 400 }
       );
     }
 
-    // Update Subtask
-    // Note: We generally don't reset status when updating details unless specifically required.
-    // If the subtask was 'Completed', updating it might imply it needs review again,
-    // but let's keep status unchanged for now unless explicitly requested.
+    // 8. Update Subtask Fields using findOneAndUpdate
+    // Note: Status is not typically reset here unless required by workflow.
     const updatedSubtask = await Subtask.findOneAndUpdate(
-      { SubtaskId: subtaskId },
+      { SubtaskId: subtaskId }, // Find condition
       {
         $set: {
+          // Fields to update
           title,
           description,
-          assignedTo,
+          assignedTo: newAssigneeIds, // Set the array of assignees
           deadline: new Date(deadline),
-          // Optionally update status here if needed, e.g., back to 'Pending' or 'In Progress'
-          // status: subtask.status === 'Completed' ? 'Pending' : subtask.status // Example logic
         },
       },
-      { new: true } // Return the updated document
+      { new: true, runValidators: true } // Options: return the updated document and run schema validators
     );
 
     if (!updatedSubtask) {
-      // Should not happen if findOne worked, but good check
+      // This could happen if the subtask was deleted between the findOne and findOneAndUpdate calls
+      console.error(
+        `Failed to find and update subtask ${subtaskId} after initial find.`
+      );
       return NextResponse.json(
-        { success: false, message: "Subtask found but update failed." },
-        { status: 500 }
+        {
+          success: false,
+          message:
+            "Subtask could not be updated. It might have been deleted or an error occurred.",
+        },
+        { status: 404 } // Or 500
       );
     }
 
-    // Success Response
+    // 9. Success Response
     return NextResponse.json({
       success: true,
       message: "Subtask updated successfully!",
-      subtask: updatedSubtask.toObject(),
+      subtask: updatedSubtask.toObject(), // Return plain object
     });
   } catch (error) {
     console.error("Error updating subtask:", error);
-    let message = "Failed to update subtask.";
-    if (error instanceof Error)
+    let message =
+      "Failed to update subtask. An internal server error occurred.";
+    let statusCode = 500;
+
+    // Handle potential Mongoose validation errors if runValidators is true
+    if (error instanceof Error && error.name === "ValidationError") {
+      message = `Validation failed during update: ${error.message}`;
+      statusCode = 400;
+    } else if (error instanceof Error) {
+      // Log specific error for debugging
       console.error(`Specific error: ${error.message}`);
-    return NextResponse.json({ success: false, message }, { status: 500 });
+      // Avoid exposing internal details in production message
+      // message = process.env.NODE_ENV === 'development' ? error.message : message;
+    }
+
+    return NextResponse.json(
+      { success: false, message: message },
+      { status: statusCode }
+    );
   }
 }

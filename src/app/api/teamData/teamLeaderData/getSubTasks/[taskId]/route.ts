@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Task, { ITask } from "@/models/Task"; // Parent Task
-import Subtask, { ISubtask } from "@/models/Subtask"; // Subtask
+import Subtask, { ISubtask } from "@/models/Subtask"; // Subtask (ensure ISubtask has assignedTo: string[])
 import AssignedProjectLog, {
   IAssignedProjectLog,
 } from "@/models/AssignedProjectLogs";
@@ -12,10 +12,19 @@ import User, { IUser } from "@/models/User";
 import { getToken, GetUserId } from "@/utils/token";
 
 // Define return types for clarity
-type MemberInfo = Pick<IUser, "UserId" | "firstname" | "lastname" | "email">; // Add profilepic if needed
+type MemberInfo = Pick<
+  IUser,
+  "UserId" | "firstname" | "lastname" | "email" | "profilepic"
+>;
 type ParentTaskInfo = Pick<
   ITask,
-  "TaskId" | "title" | "description" | "deadline" | "status"
+  | "TaskId"
+  | "title"
+  | "description"
+  | "deadline"
+  | "status"
+  | "createdAt"
+  | "updatedAt" // Added timestamps
 >;
 
 export async function GET(
@@ -24,10 +33,13 @@ export async function GET(
 ) {
   try {
     // 1. Extract Parent Task ID
-    const parentTaskId = params.taskId; // Use the correct param name
+    const parentTaskId = params.taskId;
     if (!parentTaskId) {
       return NextResponse.json(
-        { success: false, message: "Bad Request: Parent Task ID is missing." },
+        {
+          success: false,
+          message: "Bad Request: Parent Task ID is missing in URL.",
+        },
         { status: 400 }
       );
     }
@@ -51,12 +63,13 @@ export async function GET(
       );
     }
 
+    // 3. Database Connection
     await connectToDatabase();
 
-    // 3. Find Parent Task (select necessary fields)
+    // 4. Find Parent Task (select necessary fields)
     const parentTask = await Task.findOne({
       TaskId: parentTaskId,
-    }).select("TaskId title description deadline status"); // Select only needed fields
+    }).select("TaskId title description deadline status createdAt updatedAt"); // Select fields needed for display
 
     if (!parentTask) {
       return NextResponse.json(
@@ -65,10 +78,10 @@ export async function GET(
       );
     }
 
-    // 4. Find Assignment Log containing this parent task
+    // 5. Find Assignment Log containing this parent task
     const log: IAssignedProjectLog | null = await AssignedProjectLog.findOne({
-      tasksIds: parentTaskId, // Find the log where this task is listed
-    });
+      tasksIds: parentTaskId,
+    }).select("teamId AssignProjectId"); // Select needed fields
 
     if (!log) {
       console.error(
@@ -84,7 +97,7 @@ export async function GET(
       );
     }
 
-    // 5. Find the Team associated with the log
+    // 6. Find the Team associated with the log
     const team: ITeam | null = await Team.findOne({ teamId: log.teamId });
     if (!team) {
       console.error(
@@ -99,8 +112,7 @@ export async function GET(
       );
     }
 
-    // 6. Authorization Check: Verify the user leads this team
-    // Mongoose arrays can be checked directly with includes-like syntax
+    // 7. Authorization Check: Verify the user leads this team
     if (!team.teamLeader || !team.teamLeader.includes(userId)) {
       return NextResponse.json(
         {
@@ -112,34 +124,36 @@ export async function GET(
       );
     }
 
-    // 7. Fetch Subtasks for the Parent Task
+    // 8. Fetch Subtasks for the Parent Task
     const subtasks: ISubtask[] = await Subtask.find({
       parentTaskId: parentTaskId,
-    }).sort({ deadline: 1 }); // Sort by deadline, for example
+    }).sort({ deadline: 1 }); // Sort by deadline
 
-    // 8. Fetch Team Member Details
+    // 9. Fetch Team Member Details (including profilepic)
     const memberIds = team.members || [];
     let teamMembers: MemberInfo[] = [];
     if (memberIds.length > 0) {
       const memberDocs: IUser[] = await User.find({
         UserId: { $in: memberIds },
-      }).select("UserId firstname lastname email profilepic"); // Select needed fields
+      }).select("UserId firstname lastname email profilepic"); // Ensure profilepic is selected
 
-      teamMembers = memberDocs.map((doc) => doc.toObject()); // Convert to plain objects
+      teamMembers = memberDocs.map((doc) => doc.toObject());
     }
 
-    // 9. Success Response
+    // 10. Success Response
     return NextResponse.json({
       success: true,
-      parentTask: parentTask, // Return selected parent task details
+      parentTask: parentTask, // Return selected parent task details (already an object due to .select)
       subtasks: subtasks.map((s) => s.toObject()), // Return plain subtask objects
-      teamMembers: teamMembers,
+      teamMembers: teamMembers, // Return members for filtering/display
     });
   } catch (error) {
     console.error("Error fetching subtasks:", error);
     let message = "Failed to fetch subtasks.";
     if (error instanceof Error) {
       console.error(`Specific error: ${error.message}`);
+      // Avoid exposing internal details in production
+      // message = process.env.NODE_ENV === 'development' ? error.message : message;
     }
     return NextResponse.json(
       { success: false, message: message },

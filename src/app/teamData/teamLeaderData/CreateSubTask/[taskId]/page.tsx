@@ -8,7 +8,6 @@ import { toast } from "react-hot-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-
 // Import necessary components and icons
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -51,6 +50,7 @@ import {
   FileText,
   Save,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 // --- Define or import types ---
 interface ITask {
@@ -77,9 +77,10 @@ const subtaskFormSchema = z.object({
     .string()
     .trim()
     .min(10, { message: "Description must be at least 10 characters." }),
+  // assignedTo can be a UserId or the special "__all__" value
   assignedTo: z
     .string()
-    .min(1, { message: "Please assign this subtask to a team member." }), // Ensure a member is selected
+    .min(1, { message: "Please select an assignee or 'All Members'." }),
   deadlineDate: z
     .string()
     .min(1, { message: "Please select a deadline date." }),
@@ -199,7 +200,7 @@ export default function CreateSubTaskPage() {
             parentTaskId: parentTaskId, // Include parent task ID
             title: values.title,
             description: values.description,
-            assignedTo: values.assignedTo, // Send selected member ID
+            assignedTo: values.assignedTo,
             deadline: combinedDeadline.toISOString(),
           }),
         }
@@ -355,13 +356,20 @@ export default function CreateSubTaskPage() {
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a team member" />
+                          {/* Show placeholder or selected value */}
+                          <SelectValue placeholder="Select assignee or 'All Members'" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        {/* Add "All Members" Option */}
+                        <SelectItem value="__all__">
+                          Assign to All Team Members
+                        </SelectItem>
+                        <Separator className="my-1" />
+                        {/* Member Options */}
                         {teamMembers.length === 0 && (
                           <SelectItem value="" disabled>
-                            No members found
+                            No members available
                           </SelectItem>
                         )}
                         {teamMembers.map((member) => (

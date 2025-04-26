@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm } from "react-hook-form"; // Import useForm
 import * as z from "zod";
 import { format } from "date-fns";
 
@@ -40,6 +40,8 @@ import {
 } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 import {
   AlertCircle,
   Loader2,
@@ -52,7 +54,17 @@ import {
   FileEdit,
   Github,
   MessageSquare,
+  Info,
+  Users, // Added Users icon
 } from "lucide-react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+  BreadcrumbPage, // Import Breadcrumb components
+} from "@/components/ui/breadcrumb";
 
 // --- Define or import types ---
 interface ISubtask {
@@ -60,8 +72,8 @@ interface ISubtask {
   parentTaskId: string;
   title: string;
   description: string;
-  assignedTo: string;
-  deadline: string; // Expect ISO string from API initially
+  assignedTo: string[]; // Expecting array
+  deadline: string;
   status: string;
   gitHubUrl?: string;
   context?: string;
@@ -74,11 +86,11 @@ interface Member {
   firstname: string;
   lastname: string;
   email: string;
+  profilepic: string;
 }
 // --- End Type Definitions ---
 
 // --- Zod Schema for Form Validation ---
-// Matches the editable fields
 const updateSubtaskFormSchema = z.object({
   title: z
     .string()
@@ -88,7 +100,9 @@ const updateSubtaskFormSchema = z.object({
     .string()
     .trim()
     .min(10, { message: "Description must be at least 10 characters." }),
-  assignedTo: z.string().min(1, { message: "Please assign this subtask." }),
+  assignedTo: z
+    .array(z.string()) // Validate as an array of strings
+    .min(1, { message: "Please assign this subtask to at least one member." }),
   deadlineDate: z.string().min(1, { message: "Deadline date is required." }),
   hour: z.string(),
   minute: z.string(),
@@ -97,9 +111,10 @@ const updateSubtaskFormSchema = z.object({
 // --- End Zod Schema ---
 
 export default function UpdateSubTaskPage() {
+  // Renamed component
   const params = useParams();
-  const parentTaskId = params.taskId as string; // Parent Task ID
-  const subtaskId = params.subtaskId as string; // Subtask ID being edited
+  const parentTaskId = params.taskId as string;
+  const subtaskId = params.subtaskId as string;
   const router = useRouter();
 
   // State
@@ -113,10 +128,9 @@ export default function UpdateSubTaskPage() {
   const form = useForm<z.infer<typeof updateSubtaskFormSchema>>({
     resolver: zodResolver(updateSubtaskFormSchema),
     defaultValues: {
-      // Default values, will be overwritten by fetched data
       title: "",
       description: "",
-      assignedTo: "",
+      assignedTo: [], // Default to empty array
       deadlineDate: "",
       hour: "17",
       minute: "00",
@@ -125,7 +139,7 @@ export default function UpdateSubTaskPage() {
   });
   // --- End Form Setup ---
 
-  // Helper to convert UTC date string to local date/time parts for form
+  // Helper to convert UTC date string to local date/time parts
   const convertUTCtoLocalParts = useCallback((utcDateString?: string) => {
     if (!utcDateString)
       return {
@@ -137,16 +151,13 @@ export default function UpdateSubTaskPage() {
     try {
       const date = new Date(utcDateString);
       if (isNaN(date.getTime())) throw new Error("Invalid Date");
-
-      const formattedDate = date.toISOString().split("T")[0]; // YYYY-MM-DD
+      const formattedDate = date.toISOString().split("T")[0];
       const hour = date.getHours();
       const minute = date.getMinutes();
       const ampm = hour >= 12 ? "PM" : "AM";
-      const hour12 = hour % 12 || 12; // Convert 0/12 hour format
-
+      const hour12 = hour % 12 || 12;
       const hourFormatted = String(hour12).padStart(2, "0");
       const minuteFormatted = String(minute).padStart(2, "0");
-
       return { formattedDate, hourFormatted, minuteFormatted, ampm };
     } catch (e) {
       console.error("Error parsing date:", e);
@@ -155,7 +166,7 @@ export default function UpdateSubTaskPage() {
         hourFormatted: "17",
         minuteFormatted: "00",
         ampm: "PM",
-      }; // Return defaults on error
+      };
     }
   }, []);
 
@@ -169,30 +180,25 @@ export default function UpdateSubTaskPage() {
     setLoading(true);
     setError("");
     try {
-      // --- CHANGE: Use new API endpoint ---
-      // This API needs to fetch the subtask AND the team members associated with the parent task's team
       const response = await fetch(
         `/api/teamData/teamLeaderData/getSubtaskUpdateContext/${subtaskId}`,
-        { method: "GET" } // Assuming GET is suitable
+        { method: "GET" }
       );
       const data = await response.json();
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data.success)
         throw new Error(data.message || "Failed to fetch subtask details.");
-      }
-
       if (!data.subtask) throw new Error("Subtask data not found.");
 
       const fetchedSubtask: ISubtask = data.subtask;
       setSubtask(fetchedSubtask);
-      setTeamMembers(data.teamMembers || []); // Get members for assignee dropdown
+      setTeamMembers(data.teamMembers || []);
 
-      // Pre-fill the form with fetched data
       const { formattedDate, hourFormatted, minuteFormatted, ampm } =
         convertUTCtoLocalParts(fetchedSubtask.deadline);
       form.reset({
         title: fetchedSubtask.title,
         description: fetchedSubtask.description,
-        assignedTo: fetchedSubtask.assignedTo || "", // Handle potentially unassigned case?
+        assignedTo: fetchedSubtask.assignedTo || [], // Use fetched array
         deadlineDate: formattedDate,
         hour: hourFormatted,
         minute: minuteFormatted,
@@ -203,17 +209,16 @@ export default function UpdateSubTaskPage() {
       const message = err.message || "Failed to load data for update.";
       setError(message);
       toast.error(message);
-      // router.back(); // Go back if loading fails critically
     } finally {
       setLoading(false);
     }
-  }, [subtaskId, parentTaskId, form, convertUTCtoLocalParts]); // Add dependencies
+  }, [subtaskId, parentTaskId, form, convertUTCtoLocalParts]);
 
   useEffect(() => {
     fetchUpdateContext();
   }, [fetchUpdateContext]);
 
-  // Helper to format time for backend submission
+  // Helper to format time
   const getFormattedTime = (hour: string, minute: string, ampm: string) => {
     let h = parseInt(hour, 10);
     if (ampm === "PM" && h !== 12) h += 12;
@@ -225,7 +230,6 @@ export default function UpdateSubTaskPage() {
   const onSubmit = async (values: z.infer<typeof updateSubtaskFormSchema>) => {
     setSubmitting(true);
     setError("");
-
     let combinedDeadline: Date;
     try {
       const timeString = getFormattedTime(
@@ -236,8 +240,6 @@ export default function UpdateSubTaskPage() {
       combinedDeadline = new Date(`${values.deadlineDate}T${timeString}`);
       if (isNaN(combinedDeadline.getTime()))
         throw new Error("Invalid date/time.");
-      // Optional: Check if deadline is in the past
-      // if (combinedDeadline < new Date()) { toast.error("Deadline cannot be in the past."); setSubmitting(false); return; }
     } catch (e: any) {
       toast.error(e.message || "Invalid deadline format.");
       setSubmitting(false);
@@ -245,28 +247,23 @@ export default function UpdateSubTaskPage() {
     }
 
     try {
-      // --- CHANGE: Use new API endpoint ---
       const response = await fetch(
-        `/api/teamData/teamLeaderData/updateSubTask/${subtaskId}`, // Send subtaskId in URL
+        `/api/teamData/teamLeaderData/updateSubTask/${subtaskId}`,
         {
-          method: "PUT", // Use PUT or PATCH for updates
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            // Send only the updated fields from the form
             title: values.title,
             description: values.description,
-            assignedTo: values.assignedTo,
+            assignedTo: values.assignedTo, // Send the array of selected IDs
             deadline: combinedDeadline.toISOString(),
           }),
         }
       );
       const data = await response.json();
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data.success)
         throw new Error(data.message || "Failed to update subtask.");
-      }
-
       toast.success("Subtask updated successfully!");
-      // Navigate back to the subtask list for the parent task
       router.push(`/teamData/teamLeaderData/SubTasks/${parentTaskId}`);
     } catch (err: any) {
       console.error("Error updating subtask:", err);
@@ -278,23 +275,31 @@ export default function UpdateSubTaskPage() {
   };
 
   // --- Render Logic ---
-
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => router.back()}
-        className="mb-4"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Subtasks
-      </Button>
+      {/* Breadcrumbs */}
+      <Breadcrumb className="mb-6">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            {/* Link to parent task list */}
+            <BreadcrumbLink
+              href={`/teamData/teamLeaderData/SubTasks/${parentTaskId}`}
+            >
+              Subtasks
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            {/* Current Page */}
+            <BreadcrumbPage>Update Subtask</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-            <FileEdit className="h-5 w-5 sm:h-6 sm:w-6" />
-            Update Subtask
+            <FileEdit className="h-5 w-5 sm:h-6 sm:w-6" /> Update Subtask
           </CardTitle>
           <CardDescription>
             Modify the details for subtask:{" "}
@@ -309,20 +314,27 @@ export default function UpdateSubTaskPage() {
             <div className="space-y-6 py-8">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-40 w-full" />{" "}
+              {/* Skeleton for checkboxes */}
               <Skeleton className="h-10 w-full" />
             </div>
           )}
-
           {/* Error State */}
           {error && !loading && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error Loading Data</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.back()}
+                className="mt-2"
+              >
+                Go Back
+              </Button>
             </Alert>
           )}
-
           {/* Form Display */}
           {!loading && !error && subtask && (
             <Form {...form}>
@@ -346,7 +358,6 @@ export default function UpdateSubTaskPage() {
                     </FormItem>
                   )}
                 />
-
                 {/* Description */}
                 <FormField
                   control={form.control}
@@ -368,47 +379,73 @@ export default function UpdateSubTaskPage() {
                   )}
                 />
 
-                {/* Assignee */}
+                {/* Assignee Checkboxes */}
                 <FormField
                   control={form.control}
                   name="assignedTo"
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2 font-medium">
-                        <User className="h-4 w-4" /> Assign To*
+                        <Users className="h-4 w-4" /> Assign To*
                       </FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a team member" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+                      <ScrollArea className="h-40 w-full rounded-md border p-3">
+                        <div className="space-y-2">
                           {teamMembers.length === 0 && (
-                            <SelectItem value="" disabled>
-                              No members found
-                            </SelectItem>
+                            <p className="text-sm text-muted-foreground italic">
+                              No team members found.
+                            </p>
                           )}
                           {teamMembers.map((member) => (
-                            <SelectItem
+                            <FormField
                               key={member.UserId}
-                              value={member.UserId}
-                            >
-                              {member.firstname} {member.lastname} (
-                              {member.email})
-                            </SelectItem>
+                              control={form.control}
+                              name="assignedTo"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                    <FormControl>
+                                      <Checkbox
+                                        // Check if the current member's ID is in the form's array value
+                                        checked={field.value?.includes(
+                                          member.UserId
+                                        )}
+                                        onCheckedChange={(checked) => {
+                                          const currentValues =
+                                            field.value || []; // Ensure it's an array
+                                          return checked
+                                            ? field.onChange([
+                                                ...currentValues,
+                                                member.UserId,
+                                              ]) // Add ID
+                                            : field.onChange(
+                                                currentValues.filter(
+                                                  (id) => id !== member.UserId
+                                                )
+                                              ); // Remove ID
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="text-sm font-normal cursor-pointer">
+                                      {member.firstname} {member.lastname} (
+                                      {member.email})
+                                    </FormLabel>
+                                  </FormItem>
+                                );
+                              }}
+                            />
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
+                        </div>
+                      </ScrollArea>
+                      <FormDescription>
+                        Select one or more team members.
+                      </FormDescription>
+                      <FormMessage />{" "}
+                      {/* Shows validation error if array is empty */}
                     </FormItem>
                   )}
                 />
 
-                {/* Deadline */}
+                {/* Deadline Fields */}
                 <div className="space-y-4 pt-4 border-t">
                   <h3 className="text-sm font-medium flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" /> Deadline*

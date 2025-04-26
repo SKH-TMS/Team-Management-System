@@ -5,7 +5,7 @@ export interface ISubtask extends Document {
   parentTaskId: string; // Task.TaskId of the parent task
   title: string;
   description: string;
-  assignedTo: string; // userId of the assignee
+  assignedTo: string[]; // userId of the assignee
   deadline: Date;
   status: string; // e.g. "Pending"|"In Progress"|"Completed"
   gitHubUrl?: string;
@@ -25,8 +25,8 @@ const subtaskSchema = new Schema<ISubtask>(
     title: { type: String, required: [true, "Title is required"] },
     description: { type: String, required: [true, "Description is required"] },
     assignedTo: {
-      type: String,
-      required: [true, "Assigned userId is required"],
+      type: [String],
+      required: [true, "Assigned user ID is required"],
     },
     deadline: { type: Date, required: [true, "Deadline is required"] },
     status: {
