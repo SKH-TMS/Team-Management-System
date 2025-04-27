@@ -227,6 +227,19 @@ function TaskCardTeamLead({
                 <GitBranch className="w-3.5 h-3.5 mr-1" /> Manage Subtasks
               </Button>
             )}
+            {(task.status === "In Progress" || task.status === "Completed") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs px-2 h-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigateToSubtasks(e, task.TaskId);
+                }}
+              >
+                <GitBranch className="w-3.5 h-3.5 mr-1" /> Subtasks
+              </Button>
+            )}
             {(task.status === "Pending" ||
               task.status === "Re Assigned" ||
               task.status === "In Progress") && (
