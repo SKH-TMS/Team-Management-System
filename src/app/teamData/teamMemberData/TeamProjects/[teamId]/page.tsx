@@ -1,3 +1,4 @@
+// src/app/teamData/teamMemberData/TeamProjects/page.tsx
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -41,10 +42,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose, // Added Dialog components
+  DialogClose,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label"; // Added Label
-import { Separator } from "@/components/ui/separator"; // Added Separator
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 
 import { cn } from "@/lib/utils";
@@ -63,7 +64,7 @@ import {
   RefreshCw,
   Briefcase,
   FileText,
-  Loader2, // Added FileText icon
+  Loader2,
 } from "lucide-react";
 
 // --- Interfaces ---
@@ -88,6 +89,7 @@ interface Member {
 }
 // --- End Interfaces ---
 
+// Renamed component to reflect it's for Team Members
 export default function TeamMemberProjectsPage() {
   const { teamId } = useParams();
   const router = useRouter();
@@ -101,13 +103,14 @@ export default function TeamMemberProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [viewProjectDetailsData, setViewProjectDetailsData] =
-    useState<Project | null>(null); // State for details dialog
+    useState<Project | null>(null);
 
   // --- Data Fetching ---
   const fetchTeamProjects = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
+      // Ensure API endpoint matches the member's route
       const response = await fetch(
         `/api/teamData/teamMemberData/getTeamProjects/${teamId}`,
         { method: "GET" }
@@ -138,15 +141,14 @@ export default function TeamMemberProjectsPage() {
 
   // --- Event Handlers ---
   const handleNavigateToProjectTasks = (projectId: string) => {
+    // Ensure navigation route matches the member's route
     router.push(`/teamData/teamMemberData/TeamMemberProjectTasks/${projectId}`);
   };
 
-  // Handler to open the details dialog
   const handleOpenProjectDetailsDialog = (project: Project) => {
     setViewProjectDetailsData(project);
   };
 
-  // Handler to close the details dialog
   const handleCloseProjectDetailsDialog = () => {
     setViewProjectDetailsData(null);
   };
@@ -218,15 +220,7 @@ export default function TeamMemberProjectsPage() {
     const pending = projects.filter((p) => p.status === "Pending").length;
     const completionPercentage =
       total > 0 ? Math.round((completed / total) * 100) : 0;
-    const reassigned = 0; // Assuming members don't see this status for stats
-    return {
-      total,
-      completed,
-      inProgress,
-      pending,
-      reassigned,
-      completionPercentage,
-    };
+    return { total, completed, inProgress, pending, completionPercentage };
   }, [projects]);
 
   const getInitials = (firstname?: string, lastname?: string) => {
@@ -238,11 +232,12 @@ export default function TeamMemberProjectsPage() {
   // --- Render Logic ---
   if (loading) {
     return (
-      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+      // --- SKELETON (Responsive) ---
+      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         <Skeleton className="h-48 sm:h-56 w-full rounded-xl" />
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-          <Skeleton className="h-10 w-full sm:w-auto sm:flex-1" />
-          <Skeleton className="h-10 w-full sm:w-1/3" />
+          <Skeleton className="h-10 w-full sm:flex-1" />
+          <Skeleton className="h-10 w-full sm:w-1/3 md:w-1/4 lg:w-1/5" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -255,56 +250,62 @@ export default function TeamMemberProjectsPage() {
 
   if (error) {
     return (
+      // --- ERROR MESSAGE (Responsive) ---
       <div className="container mx-auto p-4 sm:p-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Failed to load Team Projects</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-          className="mt-4 mr-2 gap-1"
-        >
-          <ArrowLeft className="h-4 w-4" /> Go Back
-        </Button>
-        <Button onClick={fetchTeamProjects} className="mt-4 gap-1">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </Button>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+            className="gap-1"
+          >
+            <ArrowLeft className="h-4 w-4" /> Go Back
+          </Button>
+          <Button onClick={fetchTeamProjects} className="gap-1">
+            <RefreshCw className="h-4 w-4" /> Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <TooltipProvider>
+      {/* --- MAIN CONTENT AREA (Responsive Padding) --- */}
       <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-        {/* --- TEAM STATS CARD --- */}
+        {/* --- TEAM STATS CARD (Responsive) --- */}
         <Card className="overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 shadow-md border-0">
           <CardHeader className="p-4 sm:p-6 pb-0 sm:pb-3">
-            <div className="flex items-start sm:items-center justify-between mb-2 flex-wrap gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="h-8 w-8 rounded-full p-0 mr-2"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex-1">
-                <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary/80 flex-shrink-0" />
-                  <span className="truncate">{teamName}</span>
-                </CardTitle>
-                <CardDescription className="mt-1 text-sm">
-                  Team Projects Overview
-                </CardDescription>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
+              <div className="flex items-center w-full sm:w-auto">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.back()}
+                  className="h-8 w-8 rounded-full p-0 mr-2 flex-shrink-0"
+                  aria-label="Go back"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
+                    <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary/80 flex-shrink-0" />
+                    <span className="truncate">{teamName}</span>
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-sm truncate">
+                    Team Projects Overview
+                  </CardDescription>
+                </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={fetchTeamProjects}
-                className="h-8 w-8 rounded-full p-0"
+                className="h-8 w-8 rounded-full p-0 self-start sm:self-center flex-shrink-0"
                 aria-label="Refresh data"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -326,53 +327,53 @@ export default function TeamMemberProjectsPage() {
                 className="h-2 sm:h-2.5 bg-slate-200"
               />
             </div>
+            {/* Stats Grid - Responsive Columns */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 mb-4">
               <div className="bg-white/60 rounded-lg p-2 sm:p-3 shadow-sm border border-slate-100 flex flex-col">
                 <span className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                  <Briefcase className="h-3 w-3" /> Total Projects
+                  <Briefcase className="h-3 w-3 flex-shrink-0" /> Total Projects
                 </span>
-                <span className="text-lg sm:text-2xl font-semibold">
+                <span className="text-lg sm:text-xl md:text-2xl font-semibold truncate">
                   {projectStats.total}
                 </span>
               </div>
               <div className="bg-white/60 rounded-lg p-2 sm:p-3 shadow-sm border border-slate-100 flex flex-col">
                 <span className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                  <CheckCircle2 className="h-3 w-3" /> Completed
+                  <CheckCircle2 className="h-3 w-3 flex-shrink-0" /> Completed
                 </span>
-                <span className="text-lg sm:text-2xl font-semibold text-green-600">
+                <span className="text-lg sm:text-xl md:text-2xl font-semibold text-green-600 truncate">
                   {projectStats.completed}
                 </span>
               </div>
               <div className="bg-white/60 rounded-lg p-2 sm:p-3 shadow-sm border border-slate-100 flex flex-col">
                 <span className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                  <ClockIcon className="h-3 w-3" /> In Progress
+                  <ClockIcon className="h-3 w-3 flex-shrink-0" /> In Progress
                 </span>
-                <span className="text-lg sm:text-2xl font-semibold text-blue-600">
+                <span className="text-lg sm:text-xl md:text-2xl font-semibold text-blue-600 truncate">
                   {projectStats.inProgress}
                 </span>
               </div>
               <div className="bg-white/60 rounded-lg p-2 sm:p-3 shadow-sm border border-slate-100 flex flex-col">
                 <span className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                  <AlertCircle className="h-3 w-3" /> Pending
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" /> Pending
                 </span>
-                <span className="text-lg sm:text-2xl font-semibold text-slate-600">
+                <span className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-600 truncate">
                   {projectStats.pending}
                 </span>
               </div>
             </div>
+            {/* Team Members - ScrollArea handles responsiveness */}
             {teamMembers.length > 0 && (
               <div className="bg-white/60 rounded-lg p-3 shadow-sm border border-slate-100 mt-4">
                 <h3 className="text-sm font-medium flex items-center gap-1.5 mb-3">
-                  <Users className="h-4 w-4 text-muted-foreground" /> Team
-                  Members ({teamMembers.length})
+                  <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />{" "}
+                  Team Members ({teamMembers.length})
                 </h3>
                 <ScrollArea className="w-full pb-2">
                   <div className="flex items-center gap-2">
                     {teamMembers.map((member) => (
                       <Tooltip key={member.UserId}>
                         <TooltipTrigger>
-                          {" "}
-                          {/* Removed asChild */}
                           <Avatar className="h-8 w-8 border-2 border-white ring-2 ring-slate-50 shadow-sm flex-shrink-0">
                             <AvatarImage
                               src={member.profilepic}
@@ -404,24 +405,20 @@ export default function TeamMemberProjectsPage() {
         </Card>
         {/* --- END TEAM STATS CARD --- */}
 
-        <h1 className="text-2xl sm:text-3xl font-bold text-center pt-4">
-          Projects for {teamName}
-        </h1>
-
-        {/* Toolbar: Search + Filter (Original Structure) */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-          <div className="relative w-full">
+        {/* --- TOOLBAR (Responsive: Stacks on mobile) --- */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 pt-4">
+          <div className="relative w-full sm:flex-1">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Search projects by title or description..."
-              className="pl-10 h-9"
+              placeholder="Search projects..."
+              className="pl-10 h-9 text-sm sm:text-base"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="w-full sm:w-1/3">
+          <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 text-sm sm:text-base">
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
@@ -435,14 +432,16 @@ export default function TeamMemberProjectsPage() {
           </div>
         </div>
 
-        {/* Project Grid (Original Structure & Card) */}
+        {/* --- PROJECT GRID (Responsive Columns) --- */}
         {filteredProjects.length === 0 ? (
           <div className="text-center text-gray-600 my-10 py-10 border rounded-lg bg-slate-50">
-            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-70" />
-            <p className="text-lg font-medium">No projects found.</p>
-            <p className="text-sm text-muted-foreground">
+            <Briefcase className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-muted-foreground mb-4 opacity-70" />
+            <p className="text-base sm:text-lg font-medium">
+              No projects found.
+            </p>
+            <p className="text-xs sm:text-sm text-muted-foreground px-2">
               {searchQuery || statusFilter !== "All"
-                ? "Try adjusting your filters."
+                ? "Try adjusting your search or filter."
                 : "No projects assigned to this team yet."}
             </p>
           </div>
@@ -454,97 +453,112 @@ export default function TeamMemberProjectsPage() {
               const bg = st.bg;
 
               return (
-                // --- MODIFIED PROJECT CARD: Added onClick for dialog ---
+                // --- PROJECT CARD (Responsive Padding, Content, View Tasks Button) ---
                 <Card
                   key={p.ProjectId}
                   className={cn(
-                    "relative overflow-hidden group flex flex-col h-64 cursor-pointer", // Added cursor-pointer
-                    "p-4 sm:p-6 rounded-lg shadow hover:shadow-lg sm:hover:shadow-xl transform transition-all duration-300 sm:hover:-translate-y-1",
+                    "relative overflow-hidden group flex flex-col h-64", // Keep fixed height
+                    "p-4 rounded-lg shadow hover:shadow-md sm:hover:shadow-lg",
+                    "transform transition-all duration-300 sm:hover:-translate-y-1",
                     border,
                     bg,
                     "border-l-4"
                   )}
-                  onClick={() => handleOpenProjectDetailsDialog(p)} // Open details dialog on card click
+                  // Removed onClick for dialog here, handled by specific elements now
                 >
-                  <CardHeader className="flex-row justify-between items-start p-0 mb-2 gap-2">
-                    <CardTitle className="text-base sm:text-lg font-semibold line-clamp-2 flex-1">
-                      {p.title}
-                    </CardTitle>
-                    <Badge
-                      className={cn(
-                        "px-2 py-0.5 text-xs whitespace-nowrap",
-                        st.badge
+                  {/* Clickable area for Dialog (excluding footer) */}
+                  <div
+                    className="flex-1 flex flex-col cursor-pointer"
+                    onClick={() => handleOpenProjectDetailsDialog(p)}
+                  >
+                    <CardHeader className="flex-row justify-between items-start p-0 mb-2 gap-2">
+                      <CardTitle className="text-base font-semibold line-clamp-2 flex-1">
+                        {p.title}
+                      </CardTitle>
+                      <Badge
+                        className={cn(
+                          "px-2 py-0.5 text-xs whitespace-nowrap flex-shrink-0",
+                          st.badge
+                        )}
+                      >
+                        {st.icon} <span className="ml-1">{p.status}</span>
+                      </Badge>
+                    </CardHeader>
+
+                    <CardContent className="flex-1 text-xs text-gray-700 space-y-1.5 p-0 overflow-hidden">
+                      <p className="line-clamp-3">
+                        {p.description || "No description."}
+                      </p>
+                      {p.deadline && (
+                        <p className="flex items-center text-xs text-gray-500 pt-1">
+                          <CalendarIcon className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
+                          Due: {format(new Date(p.deadline), "PP")}
+                        </p>
                       )}
-                    >
-                      {st.icon} <span className="ml-1">{p.status}</span>
-                    </Badge>
-                  </CardHeader>
+                      {p.tasksIds && (
+                        <p className="flex items-center text-xs text-gray-500">
+                          <ListChecks className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
+                          {p.tasksIds.length} Task
+                          {p.tasksIds.length !== 1 && "s"}
+                        </p>
+                      )}
+                    </CardContent>
 
-                  <CardContent className="flex-1 text-xs sm:text-sm text-gray-700 space-y-2 p-0 overflow-hidden">
-                    <p className="line-clamp-3">
-                      {p.description || "No description."}
-                    </p>
-                    {p.deadline && (
-                      <p className="flex items-center text-xs text-gray-500 pt-1">
-                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
-                        Due: {format(new Date(p.deadline), "PP")}
-                      </p>
-                    )}
-                    {p.tasksIds && (
-                      <p className="flex items-center text-xs text-gray-500">
-                        <ListChecks className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
-                        {p.tasksIds.length} Task{p.tasksIds.length !== 1 && "s"}
-                      </p>
-                    )}
-                  </CardContent>
+                    <CardFooter className="flex items-center justify-between p-0 pt-2 mt-auto">
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <span className="text-xs">{p.ProjectId}</span>
+                        </TooltipContent>
+                      </Tooltip>
+                      <span className="text-xs text-gray-400">
+                        Created: {format(new Date(p.createdAt), "MMM d, yyyy")}
+                      </span>
+                    </CardFooter>
+                  </div>
 
-                  <CardFooter className="flex items-center justify-between p-0 pt-2">
-                    <Tooltip>
-                      <TooltipTrigger>
-                        {" "}
-                        {/* Removed asChild */}
-                        <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600" />
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <span className="text-xs">{p.ProjectId}</span>
-                      </TooltipContent>
-                    </Tooltip>
-                    <span className="text-xs text-gray-400">
-                      Created: {format(new Date(p.createdAt), "MMM d, yyyy")}
-                    </span>
-                  </CardFooter>
-
-                  {/* Keep the View Tasks overlay, but it now navigates */}
+                  {/* --- VIEW TASKS BUTTON (Responsive Visibility) --- */}
                   <div
                     className={cn(
-                      "absolute inset-x-0 bottom-0 text-center py-2",
-                      "bg-white/70 backdrop-blur-sm",
-                      "opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-                      "cursor-pointer border-t border-slate-200"
+                      "mt-2 pt-2 border-t border-slate-200/80",
+                      "text-center",
+                      // --- RESPONSIVE CHANGE ---
+                      // Always visible block on mobile, becomes hover overlay on sm+
+                      "block sm:absolute sm:inset-x-0 sm:bottom-0 sm:py-2",
+                      "sm:bg-white/70 sm:backdrop-blur-sm",
+                      "sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-300",
+                      "sm:border-t sm:border-slate-200"
                     )}
                     onClick={(e) => {
-                      e.stopPropagation(); // Prevent card click when clicking overlay
+                      e.stopPropagation(); // Prevent card click when clicking button
                       handleNavigateToProjectTasks(p.ProjectId);
                     }}
                   >
-                    <span className="text-sm font-medium text-primary hover:underline">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-sm font-medium text-primary hover:underline h-auto p-0"
+                    >
                       View Tasks
-                    </span>
+                    </Button>
                   </div>
+                  {/* --- END VIEW TASKS BUTTON --- */}
                 </Card>
               );
             })}
           </div>
         )}
 
-        {/* --- ADDED PROJECT DETAILS DIALOG --- */}
+        {/* --- PROJECT DETAILS DIALOG (Responsive Content) --- */}
         <Dialog
           open={!!viewProjectDetailsData}
           onOpenChange={(open) => !open && handleCloseProjectDetailsDialog()}
         >
-          <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
+          <DialogContent className="w-[95vw] max-w-xl sm:max-w-2xl md:max-w-3xl max-h-[90vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle className="text-xl flex items-center gap-2">
+              <DialogTitle className="text-lg sm:text-xl flex items-center gap-2">
                 <Briefcase className="h-5 w-5 text-primary flex-shrink-0" />
                 <span className="truncate">
                   {viewProjectDetailsData?.title}
@@ -552,7 +566,7 @@ export default function TeamMemberProjectsPage() {
                 {viewProjectDetailsData?.status && (
                   <Badge
                     className={cn(
-                      "ml-auto px-2 py-0.5 text-xs whitespace-nowrap",
+                      "ml-auto px-2 py-0.5 text-xs whitespace-nowrap flex-shrink-0",
                       (
                         statusStyles[viewProjectDetailsData.status] ||
                         statusStyles.Default
@@ -571,14 +585,15 @@ export default function TeamMemberProjectsPage() {
                   </Badge>
                 )}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs sm:text-sm">
                 Detailed information about the project.
               </DialogDescription>
             </DialogHeader>
             {viewProjectDetailsData && (
-              <ScrollArea className="flex-grow pr-6 -mr-6">
-                <div className="space-y-4 py-4 text-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+              <ScrollArea className="flex-grow pr-4 -mr-4 sm:pr-6 sm:-mr-6">
+                <div className="space-y-3 sm:space-y-4 py-4 text-sm">
+                  {/* Details Grid - Responsive Columns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-3">
                     <div className="space-y-1">
                       <Label className="flex items-center text-xs font-medium text-muted-foreground">
                         <Users className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />{" "}
@@ -638,7 +653,7 @@ export default function TeamMemberProjectsPage() {
                         <Info className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />{" "}
                         Project ID
                       </Label>
-                      <p className="font-mono text-xs">
+                      <p className="font-mono text-xs break-all">
                         {viewProjectDetailsData.ProjectId}
                       </p>
                     </div>
@@ -652,7 +667,7 @@ export default function TeamMemberProjectsPage() {
                       <FileText className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />{" "}
                       Description
                     </Label>
-                    <div className="text-sm mt-1 whitespace-pre-line bg-slate-50 p-3 rounded-md border">
+                    <div className="text-sm mt-1 whitespace-pre-line bg-slate-50 p-3 rounded-md border max-h-48 overflow-y-auto">
                       {viewProjectDetailsData.description ||
                         "No description provided."}
                     </div>
@@ -660,10 +675,12 @@ export default function TeamMemberProjectsPage() {
                 </div>
               </ScrollArea>
             )}
-            <DialogFooter className="pt-4 border-t mt-auto">
+            {/* Dialog Footer - Buttons stack on smaller screens */}
+            <DialogFooter className="pt-4 border-t mt-auto flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={handleCloseProjectDetailsDialog}
+                className="w-full sm:w-auto"
               >
                 Close
               </Button>
@@ -673,6 +690,7 @@ export default function TeamMemberProjectsPage() {
                     viewProjectDetailsData!.ProjectId
                   )
                 }
+                className="w-full sm:w-auto"
               >
                 <Eye className="mr-2 h-4 w-4" /> View Tasks
               </Button>
