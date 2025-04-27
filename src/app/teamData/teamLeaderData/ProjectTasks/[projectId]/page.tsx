@@ -201,17 +201,30 @@ function TaskCardTeamLead({
         {/* Conditional Buttons for Team Leader */}
         {task.status === "Completed" ? (
           // Responsive Button: text-xs h-7 px-2
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs px-2 h-7"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewCompletedTask(e, task);
-            }}
-          >
-            <Eye className="w-3.5 h-3.5 mr-1" /> View Submission
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs px-2 h-7"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewCompletedTask(e, task);
+              }}
+            >
+              <Eye className="w-3.5 h-3.5 mr-1" /> View Submission
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs px-2 h-7"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigateToSubtasks(e, task.TaskId);
+              }}
+            >
+              <GitBranch className="w-3.5 h-3.5 mr-1" /> See Subtasks
+            </Button>
+          </>
         ) : (
           <>
             {(task.status === "Pending" || task.status === "Re Assigned") && (
