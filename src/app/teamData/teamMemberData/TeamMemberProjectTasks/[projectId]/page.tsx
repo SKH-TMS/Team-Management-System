@@ -137,8 +137,7 @@ function TaskCardMember({
             className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 flex items-center gap-1"
           >
             <CheckCircle2 className="w-3 h-3" />
-            <span className="hidden xs:inline">Completed</span>
-            <span className="xs:hidden">Done</span>
+            <span className="xs:hidden">Completed</span>
           </Badge>
         );
       case "pending":
@@ -713,90 +712,6 @@ export default function TeamMemberProjectTasksPage() {
 
         {/* Tab & Filters Bar */}
         <div className="mb-6 space-y-4">
-          {/* Status Tabs - Scrollable on mobile */}
-          <ScrollArea className="w-full whitespace-nowrap pb-2">
-            <div className="flex">
-              <Tabs>
-                <TabsList className="bg-transparent h-auto p-1">
-                  <TabsTrigger
-                    value="all"
-                    onClick={() => setActiveTab("all")}
-                    className={cn(
-                      "rounded-full text-xs px-3 py-1.5 h-auto data-[state=active]:shadow-sm",
-                      activeTab === "all" &&
-                        "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    All Tasks
-                    <Badge className="ml-2 text-[10px] h-4 min-w-4 bg-primary-foreground text-primary">
-                      {tasks.length}
-                    </Badge>
-                  </TabsTrigger>
-
-                  <TabsTrigger
-                    value="pending"
-                    onClick={() => setActiveTab("pending")}
-                    className={cn(
-                      "rounded-full text-xs px-3 py-1.5 h-auto data-[state=active]:shadow-sm",
-                      activeTab === "pending" && "bg-slate-200 text-slate-900"
-                    )}
-                  >
-                    Pending
-                    <Badge className="ml-2 text-[10px] h-4 min-w-4 bg-slate-700 text-white">
-                      {getTasksByStatus("pending").length}
-                    </Badge>
-                  </TabsTrigger>
-
-                  <TabsTrigger
-                    value="in progress"
-                    onClick={() => setActiveTab("in progress")}
-                    className={cn(
-                      "rounded-full text-xs px-3 py-1.5 h-auto data-[state=active]:shadow-sm",
-                      activeTab === "in progress" && "bg-blue-100 text-blue-900"
-                    )}
-                  >
-                    In Progress
-                    <Badge className="ml-2 text-[10px] h-4 min-w-4 bg-blue-600 text-white">
-                      {getTasksByStatus("in progress").length}
-                    </Badge>
-                  </TabsTrigger>
-
-                  <TabsTrigger
-                    value="completed"
-                    onClick={() => setActiveTab("completed")}
-                    className={cn(
-                      "rounded-full text-xs px-3 py-1.5 h-auto data-[state=active]:shadow-sm",
-                      activeTab === "completed" && "bg-green-100 text-green-900"
-                    )}
-                  >
-                    Completed
-                    <Badge className="ml-2 text-[10px] h-4 min-w-4 bg-green-600 text-white">
-                      {getTasksByStatus("completed").length}
-                    </Badge>
-                  </TabsTrigger>
-
-                  {stats.reassigned > 0 && (
-                    <TabsTrigger
-                      value="re assigned"
-                      onClick={() => setActiveTab("re assigned")}
-                      className={cn(
-                        "rounded-full text-xs px-3 py-1.5 h-auto data-[state=active]:shadow-sm",
-                        activeTab === "re assigned" &&
-                          "bg-amber-100 text-amber-900"
-                      )}
-                    >
-                      Re-Assigned
-                      <Badge className="ml-2 text-[10px] h-4 min-w-4 bg-amber-600 text-white">
-                        {getTasksByStatus("re assigned").length}
-                      </Badge>
-                    </TabsTrigger>
-                  )}
-                </TabsList>
-              </Tabs>
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-
           {/* Mobile Filters Toggle */}
           <div className="flex items-center justify-between mb-4 sm:hidden">
             <Button
