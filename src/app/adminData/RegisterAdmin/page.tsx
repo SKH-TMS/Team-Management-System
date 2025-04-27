@@ -69,10 +69,9 @@ export default function RegisterAdmin() {
         toast.success(
           result.message || "Registration successful! Check email."
         );
-        // router.push(
-        //   `/adminData/VerificationEmailSent?email=${encodeURIComponent(values.email.toLowerCase().trim())}`
-        // );
-        router.push("/adminData/LoginAdmin");
+        router.push(
+          `/adminData/VerificationEmailSent?email=${encodeURIComponent(values.email.toLowerCase().trim())}`
+        );
       } else {
         const errorMessage = result.message || "Registration failed.";
         setApiError(errorMessage);

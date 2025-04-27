@@ -71,37 +71,37 @@ export async function POST(req: Request) {
       contact: contact || "",
       profilepic: "/default-profile.png",
       userType: "User",
-      // verificationToken: hashedToken,
-      // verificationTokenExpires: expiryDate,
+      verificationToken: hashedToken,
+      verificationTokenExpires: expiryDate,
     });
 
     await newUser.save();
     console.log(
       `User ${newUser.email} created with ID ${newUser.UserId}, awaiting verification.`
     );
-    // if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
-    //   try {
-    //     const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/userData/verify-email?token=${rawToken}`; // Use RAW token in link
+    if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
+      try {
+        const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/userData/verify-email?token=${rawToken}`; // Use RAW token in link
 
-    //     await sendUserVerificationEmail({
-    //       recipientName: newUser.firstname,
-    //       recipientEmail: newUser.email,
-    //       verificationUrl: verificationUrl,
-    //     });
-    //     console.log(
-    //       `Verification email sending initiated for ${newUser.email}.`
-    //     );
-    //   } catch (emailError) {
-    //     console.error(
-    //       `Failed to send verification email to ${newUser.email} after registration:`,
-    //       emailError
-    //     );
-    //   }
-    // } else {
-    //   console.warn(
-    //     `Skipping verification email for ${newUser.email} due to missing configuration.`
-    //   );
-    // }
+        await sendUserVerificationEmail({
+          recipientName: newUser.firstname,
+          recipientEmail: newUser.email,
+          verificationUrl: verificationUrl,
+        });
+        console.log(
+          `Verification email sending initiated for ${newUser.email}.`
+        );
+      } catch (emailError) {
+        console.error(
+          `Failed to send verification email to ${newUser.email} after registration:`,
+          emailError
+        );
+      }
+    } else {
+      console.warn(
+        `Skipping verification email for ${newUser.email} due to missing configuration.`
+      );
+    }
 
     return NextResponse.json(
       {
