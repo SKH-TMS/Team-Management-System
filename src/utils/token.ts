@@ -4,7 +4,7 @@ import * as cookie from "cookie";
 
 const secretKey = process.env.SECRETKEY;
 
-const JWT_EXPIRATION = "2h"; // Token expiration time
+const JWT_EXPIRATION = "6h"; // Token expiration time
 
 export const setToken = (res: NextResponse, token: string) => {
   const serialized = cookie.serialize("token", token, {
