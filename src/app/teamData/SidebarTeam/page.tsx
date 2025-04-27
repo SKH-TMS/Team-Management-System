@@ -1,6 +1,7 @@
+// src/app/teamData/SidebarTeam/page.tsx
 "use client";
 
-import React, { useState, useContext } from "react";
+import React, { useContext } from "react"; // Removed useState
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -9,14 +10,13 @@ import {
   ListChecks,
   Users,
   ClipboardPlus,
-  Menu as MenuIcon,
-  X as CloseIcon,
+  // Removed MenuIcon, CloseIcon
 } from "lucide-react";
 
 export default function SidebarTeam() {
   const { userStatus } = useContext(AuthContext);
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(false);
+  // Removed expanded state and toggle button logic
 
   if (!userStatus?.success) return null;
 
@@ -50,28 +50,23 @@ export default function SidebarTeam() {
     });
   }
 
+  // Return null if no items to show (optional, but good practice)
+  if (menuItems.length === 0) {
+    return null;
+  }
+
   return (
     <>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="fixed top-[200px] left-0 z-50 p-1.5 bg-background shadow-md rounded-r-md md:hidden"
-        aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-      >
-        {expanded ? (
-          <CloseIcon className="h-5 w-5" />
-        ) : (
-          <MenuIcon className="h-5 w-5" />
-        )}
-      </button>
+      {/* Removed the mobile toggle button */}
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background " +
-            "overflow-hidden transition-all duration-200 ease-in-out pt-16",
-
-          expanded ? "translate-x-0 w-64" : "-translate-x-full",
-
-          "md:translate-x-0 md:w-64"
+          // --- Apply responsive visibility ---
+          "hidden md:flex", // Hide by default, show as flex on md+ screens
+          // --- Keep existing styles for desktop ---
+          "fixed inset-y-0 left-0 z-40 flex-col border-r bg-background",
+          "overflow-hidden pt-16 w-64" // Keep fixed width for desktop
+          // Removed transition classes as they are not needed for simple hide/show
         )}
       >
         <nav className="flex-1 flex flex-col items-center space-y-1 pt-2">
@@ -84,7 +79,7 @@ export default function SidebarTeam() {
               <Link
                 key={idx}
                 href={path}
-                onClick={() => expanded && setExpanded(false)}
+                // Removed onClick for mobile state change
                 className={cn(
                   "flex items-center h-12 w-full px-3 transition-colors justify-start",
                   isActive
@@ -100,12 +95,7 @@ export default function SidebarTeam() {
         </nav>
       </aside>
 
-      {expanded && (
-        <div
-          className="fixed inset-0 bg-black/30 z-30 md:hidden"
-          onClick={() => setExpanded(false)}
-        />
-      )}
+      {/* Removed the mobile overlay div */}
     </>
   );
 }
