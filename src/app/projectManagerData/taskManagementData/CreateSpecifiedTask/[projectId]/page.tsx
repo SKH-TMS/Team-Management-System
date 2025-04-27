@@ -108,7 +108,7 @@ export default function CreateTaskForProjectPage() {
         setError(e.message || "Failed to load project assignment details.");
         toast.error(e.message || "Failed to load project assignment details.");
         // Maybe redirect if assignment context is crucial and not found
-        // router.back();
+        router.back();
       } finally {
         setLoading(false);
       }
@@ -177,7 +177,7 @@ export default function CreateTaskForProjectPage() {
       }
       toast.success("Task created successfully!");
       // Navigate to the main task list or project-specific task list
-      router.push(`/projectManagerData/taskManagementData/ManageTasks`);
+      router.back();
       // Or maybe: router.push(`/projectManagerData/taskManagementData/ProjectTasks/${projectId}`);
     } catch (e: any) {
       console.error("Error creating task:", e);

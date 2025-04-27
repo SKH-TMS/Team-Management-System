@@ -224,7 +224,7 @@ export default function CreateTaskPage() {
       }
 
       toast.success("Task created successfully!");
-      router.push("/projectManagerData/taskManagementData/ManageTasks"); // Navigate to task list on success
+      router.back(); // Navigate to task list on success
       // Or router.back(); if preferred
     } catch (e: any) {
       console.error("Error creating task:", e);
