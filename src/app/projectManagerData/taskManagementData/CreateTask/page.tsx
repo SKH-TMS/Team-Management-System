@@ -202,7 +202,7 @@ export default function CreateTaskPage() {
       // The endpoint name 'assignTask' might be slightly misleading now, maybe 'createAndAssignTask'?
       // We pass projectId in the URL and teamId in the body for this example.
       const res = await fetch(
-        `/api/projectManagerData/taskManagementData/createTask`, // Changed endpoint name suggestion
+        `/api/projectManagerData/taskManagementData/createTask/${selectedProjectId}`, // Changed endpoint name suggestion
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -211,7 +211,7 @@ export default function CreateTaskPage() {
             description: description.trim(),
             // assignedTo: undefined, // REMOVED: No longer sending assignedTo
             teamId: selectedTeamId,
-            projectId: selectedProjectId, // Send projectId in body as well
+            //projectId: selectedProjectId, // Send projectId in body as well
             deadline: combinedDeadline.toISOString(), // Send full ISO string
           }),
         }
