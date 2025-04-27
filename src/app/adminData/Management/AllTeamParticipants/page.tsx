@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-//TODO:Implement single delete and single updation
+//TODO:Implement Delete function in well structured way
 import {
   Users,
   Trash2,
@@ -88,7 +88,7 @@ export default function AllTeamParticipants() {
     key: keyof User | null;
     direction: "ascending" | "descending" | null;
   }>({ key: null, direction: null });
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  //const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>("all");
 
@@ -235,56 +235,56 @@ export default function AllTeamParticipants() {
     }
   };
 
-  const handleDelete = async () => {
-    if (selectedUsers.length === 0) {
-      toast.error("Please select at least one participant to delete.");
-      return;
-    }
+  // const handleDelete = async () => {
+  //   if (selectedUsers.length === 0) {
+  //     toast.error("Please select at least one participant to delete.");
+  //     return;
+  //   }
 
-    setConfirmDeleteOpen(true);
-  };
+  //   setConfirmDeleteOpen(true);
+  // };
 
-  const confirmDelete = async () => {
-    setIsDeleting(true);
-    const deleteEndpoint = "/api/adminData/deleteParticipents";
+  // const confirmDelete = async () => {
+  //   setIsDeleting(true);
+  //   const deleteEndpoint = "/api/adminData/deleteParticipents";
 
-    try {
-      const response = await fetch(deleteEndpoint, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedUsers }),
-      });
+  //   try {
+  //     const response = await fetch(deleteEndpoint, {
+  //       method: "DELETE",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ ids: selectedUsers }),
+  //     });
 
-      const data = await response.json();
-      if (data.success || response.status === 207) {
-        toast.success(data.message || "Selected participant(s) processed.");
+  //     const data = await response.json();
+  //     if (data.success || response.status === 207) {
+  //       toast.success(data.message || "Selected participant(s) processed.");
 
-        setUsers((prevUsers) =>
-          prevUsers.filter((user) => !selectedUsers.includes(user.UserId))
-        );
-        setSelectedUsers([]);
+  //       setUsers((prevUsers) =>
+  //         prevUsers.filter((user) => !selectedUsers.includes(user.UserId))
+  //       );
+  //       setSelectedUsers([]);
 
-        if (response.status === 207 && data.details?.failedCount > 0) {
-          toast.error(
-            `Failed to delete ${data.details.failedCount} participant(s). Check console.`
-          );
-          console.error(
-            "Deletion Failures:",
-            data.details.invalidOrSkippedEmails || data.details
-          );
-        }
-      } else {
-        throw new Error(data.message || "Failed to delete participants.");
-      }
-    } catch (err) {
-      const error = err as Error;
-      console.error("Error deleting participants:", error);
-      toast.error(`Failed to delete participants: ${error.message}`);
-    } finally {
-      setIsDeleting(false);
-      setConfirmDeleteOpen(false);
-    }
-  };
+  //       if (response.status === 207 && data.details?.failedCount > 0) {
+  //         toast.error(
+  //           `Failed to delete ${data.details.failedCount} participant(s). Check console.`
+  //         );
+  //         console.error(
+  //           "Deletion Failures:",
+  //           data.details.invalidOrSkippedEmails || data.details
+  //         );
+  //       }
+  //     } else {
+  //       throw new Error(data.message || "Failed to delete participants.");
+  //     }
+  //   } catch (err) {
+  //     const error = err as Error;
+  //     console.error("Error deleting participants:", error);
+  //     toast.error(`Failed to delete participants: ${error.message}`);
+  //   } finally {
+  //     setIsDeleting(false);
+  //     setConfirmDeleteOpen(false);
+  //   }
+  // };
 
   const handleUpdate = () => {
     if (selectedUsers.length === 0) {
@@ -293,7 +293,13 @@ export default function AllTeamParticipants() {
     }
     router.push(`UpdateParticipants?ids=${selectedUsers.join(",")}`);
   };
-
+  const handleSingleUpdate = (userId: string) => {
+    if (userId === "") {
+      toast.error("Please select at least one user to update.");
+      return;
+    }
+    router.push(`/adminData/Management/EditUserProfile/${userId}`);
+  };
   const handleGoToDetails = (userId: string) => {
     router.push(`ParticipantDetails/${encodeURIComponent(userId)}`);
   };
@@ -360,14 +366,14 @@ export default function AllTeamParticipants() {
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button
+              {/* <Button
                 variant="destructive"
                 onClick={handleDelete}
                 disabled={selectedUsers.length === 0}
               >
                 <Trash2 className="mr-2 h-4 w-4" /> Delete (
                 {selectedUsers.length})
-              </Button>
+              </Button> */}
               <Button
                 variant="default"
                 onClick={handleUpdate}
@@ -526,15 +532,14 @@ export default function AllTeamParticipants() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setSelectedUsers([user.UserId]);
-                                    handleUpdate();
+                                    handleSingleUpdate(user.UserId);
                                   }}
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
+                                {/* <DropdownMenuItem
                                   className="text-red-600"
                                   onClick={() => {
                                     setSelectedUsers([user.UserId]);
@@ -543,7 +548,7 @@ export default function AllTeamParticipants() {
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Delete
-                                </DropdownMenuItem>
+                                </DropdownMenuItem> */}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -562,7 +567,7 @@ export default function AllTeamParticipants() {
         </CardContent>
       </Card>
 
-      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      {/* <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
@@ -598,7 +603,7 @@ export default function AllTeamParticipants() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </div>
   );
 }
