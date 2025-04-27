@@ -1,54 +1,47 @@
+// src/app/adminData/Management/SidebarAdmin/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React from "react"; // Removed useState
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Users, Briefcase, List as ListIcon, X as XIcon } from "lucide-react";
+import { Users, Briefcase } from "lucide-react"; // Removed ListIcon, XIcon
+
+// Define menu items directly here or import if needed elsewhere
+const menuItems = [
+  {
+    title: "Manage Users",
+    path: "/adminData/Management/AllUsers",
+    icon: Users,
+  },
+  {
+    title: "Manage PMs",
+    path: "/adminData/Management/AllProjectManagers",
+    icon: Briefcase,
+  },
+  {
+    title: "Team Members",
+    path: "/adminData/Management/AllTeamParticipants",
+    icon: Users, // Assuming same icon
+  },
+];
 
 export default function SidebarAdmin() {
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(false);
-
-  const menuItems = [
-    {
-      title: "Manage Users",
-      path: "/adminData/Management/AllUsers",
-      icon: Users,
-    },
-    {
-      title: "Manage PMs",
-      path: "/adminData/Management/AllProjectManagers",
-      icon: Briefcase,
-    },
-    {
-      title: "Team Members",
-      path: "/adminData/Management/AllTeamParticipants",
-      icon: Users,
-    },
-  ];
+  // Removed expanded state and toggle logic
 
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background pt-16 " +
-          "overflow-hidden transition-all duration-200 ease-in-out",
-        expanded ? "w-64" : "w-16",
-
-        "md:w-64"
+        // --- Apply responsive visibility ---
+        "hidden md:flex", // Hide by default, show as flex column on md+
+        // --- Keep existing styles for desktop ---
+        "fixed inset-y-0 left-0 z-40 flex-col border-r bg-background",
+        "overflow-hidden pt-16 w-64" // Fixed width for desktop
+        // Removed transition classes and mobile width logic
       )}
     >
-      <button
-        className="absolute top-4 right-[-1rem] hidden p-1 rounded-full 
-                   bg-background shadow-md md:hidden"
-        onClick={() => setExpanded((x) => !x)}
-      >
-        {expanded ? (
-          <XIcon className="h-6 w-6" />
-        ) : (
-          <ListIcon className="h-6 w-6" />
-        )}
-      </button>
+      {/* Removed the mobile toggle button */}
 
       <nav className="flex-1 flex flex-col items-center space-y-1 pt-2">
         {menuItems.map((item, idx) => {
@@ -60,22 +53,18 @@ export default function SidebarAdmin() {
             <Link
               key={idx}
               href={item.path}
+              // Removed onClick for mobile state change
               className={cn(
                 "flex items-center h-12 w-full px-3 transition-colors",
-                "justify-center text-muted-foreground hover:bg-muted hover:text-primary",
-                isActive && "bg-muted text-primary font-semibold"
+                "justify-start", // Align items to the start for desktop
+                isActive
+                  ? "bg-muted text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-primary"
               )}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
-              <span
-                className={cn(
-                  "ml-3 whitespace-nowrap",
-                  expanded ? "inline-block" : "hidden",
-                  "md:inline-block"
-                )}
-              >
-                {item.title}
-              </span>
+              {/* Text is always visible on desktop */}
+              <span className="ml-3 whitespace-nowrap">{item.title}</span>
             </Link>
           );
         })}
