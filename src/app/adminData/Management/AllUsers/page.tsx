@@ -457,7 +457,7 @@ export default function AllUsers() {
       toast.error(`Assignment failed: ${error.message}`);
     } finally {
       setIsAssigning(false);
-      setConfirmAssignOpen(false);
+      setConfirmSingleAssignOpen(false);
     }
   };
   const handleGoToDetails = (userId: string) => {
