@@ -72,6 +72,7 @@ export default function AllProjectManagers() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedSingleUser, setSelectedSingleUser] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -80,6 +81,7 @@ export default function AllProjectManagers() {
     direction: "ascending" | "descending" | null;
   }>({ key: null, direction: null });
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmSingleDeleteOpen, setConfirmSingleDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const router = useRouter();
@@ -230,14 +232,22 @@ export default function AllProjectManagers() {
 
     setConfirmDeleteOpen(true);
   };
+  const handleSingleDelete = async (email: string) => {
+    setSelectedSingleUser(email);
+    if (selectedSingleUser === "") {
+      toast.error("Please select at least one user to delete.");
+      return;
+    }
 
+    setConfirmSingleDeleteOpen(true);
+  };
   const confirmDelete = async () => {
     setIsDeleting(true);
     const deleteEndpoint = "/api/adminData/deleteProjectManagers";
 
     try {
       const response = await fetch(deleteEndpoint, {
-        method: "DELETE",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emails: selectedUsers }),
       });
@@ -275,6 +285,50 @@ export default function AllProjectManagers() {
       setConfirmDeleteOpen(false);
     }
   };
+  const confirmSingleDelete = async () => {
+    setIsDeleting(true);
+    const deleteEndpoint = "/api/adminData/deleteProjectManagers";
+
+    try {
+      const response = await fetch(deleteEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: [selectedSingleUser] }),
+      });
+
+      const data = await response.json();
+      if (data.success || response.status === 207) {
+        toast.success(data.message || "Selected project manager(s) processed.");
+
+        setUsers((prevUsers) =>
+          prevUsers.filter((user) => !selectedUsers.includes(user.email))
+        );
+        setSelectedSingleUser("");
+
+        if (
+          response.status === 207 &&
+          data.details?.invalidOrSkippedEmails?.length > 0
+        ) {
+          toast.error(
+            `Failed to delete ${selectedSingleUser} project manager. Check console.`
+          );
+          console.error(
+            "Deletion Failures:",
+            data.details.invalidOrSkippedEmails
+          );
+        }
+      } else {
+        throw new Error(data.message || "Failed to delete project managers.");
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error("Error deleting project managers:", error);
+      toast.error(`Failed to delete project managers: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+      setConfirmSingleDeleteOpen(false);
+    }
+  };
 
   const handleUpdate = () => {
     if (selectedUsers.length === 0) {
@@ -284,6 +338,13 @@ export default function AllProjectManagers() {
     router.push(
       `/adminData/Management/UpdatePMs?emails=${selectedUsers.join(",")}`
     );
+  };
+  const handlesingleUpdate = (userId: string) => {
+    if (userId === "") {
+      toast.error("Please select at least one user to update.");
+      return;
+    }
+    router.push(`/adminData/Management/EditUserProfile/${userId}`);
   };
 
   const handleGoToDetails = (userId: string) => {
@@ -511,8 +572,7 @@ export default function AllProjectManagers() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setSelectedUsers([user.email]);
-                                    handleUpdate();
+                                    handlesingleUpdate(user.UserId);
                                   }}
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
@@ -522,8 +582,7 @@ export default function AllProjectManagers() {
                                 <DropdownMenuItem
                                   className="text-red-600"
                                   onClick={() => {
-                                    setSelectedUsers([user.email]);
-                                    handleDelete();
+                                    handleSingleDelete(user.email);
                                   }}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
@@ -570,6 +629,48 @@ export default function AllProjectManagers() {
             <Button
               variant="destructive"
               onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={confirmSingleDeleteOpen}
+        onOpenChange={setConfirmSingleDeleteOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedSingleUser} selected
+              project manager This action will also delete all associated
+              Projects, Teams, Assignments, and Tasks created by or assigned to
+              them. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmSingleDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmSingleDelete}
               disabled={isDeleting}
             >
               {isDeleting ? (
