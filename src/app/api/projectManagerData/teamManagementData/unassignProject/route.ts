@@ -4,7 +4,6 @@ import AssignedProjectLog from "@/models/AssignedProjectLogs";
 import Task, { ITask } from "@/models/Task"; // Assuming ITask interface exists
 import Subtask from "@/models/Subtask"; // Import the Subtask model
 import { getToken, GetUserId, GetUserType } from "@/utils/token";
-import mongoose from "mongoose"; // Import mongoose if needed for types
 
 export async function POST(req: NextRequest) {
   try {
