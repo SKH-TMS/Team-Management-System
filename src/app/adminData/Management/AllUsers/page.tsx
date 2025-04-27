@@ -73,6 +73,7 @@ export default function AllUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedSingleUser, setSelectedSingleUser] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -82,6 +83,8 @@ export default function AllUsers() {
   }>({ key: null, direction: null });
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
+  const [confirmSingleDeleteOpen, setConfirmSingleDeleteOpen] = useState(false);
+  const [confirmSingleAssignOpen, setConfirmSingleAssignOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -237,6 +240,15 @@ export default function AllUsers() {
 
     setConfirmDeleteOpen(true);
   };
+  const handleSingleDelete = async (email: string) => {
+    setSelectedSingleUser(email);
+    if (selectedSingleUser === "") {
+      toast.error("Please select at least one user to delete.");
+      return;
+    }
+
+    setConfirmSingleDeleteOpen(true);
+  };
 
   const confirmDelete = async () => {
     setIsDeleting(true);
@@ -270,10 +282,46 @@ export default function AllUsers() {
       toast.error(`Failed to delete users: ${error.message}`);
     } finally {
       setIsDeleting(false);
+      setSelectedUsers([]);
       setConfirmDeleteOpen(false);
     }
   };
+  const confirmSingleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch("/api/adminData/deleteUsers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: [selectedSingleUser] }),
+      });
 
+      const data = await response.json();
+      if (data.success || response.status === 207) {
+        toast.success(data.message || "Selected user(s) processed.");
+        setUsers((prevUsers) =>
+          prevUsers.filter((user) => !selectedUsers.includes(user.email))
+        );
+        setSelectedSingleUser("");
+
+        if (response.status === 207 && data.details?.failedCount > 0) {
+          toast.error(
+            `Failed to delete ${data.details.failedCount} user(s). Check console.`
+          );
+          console.error("Deletion Failures:", data.details);
+        }
+      } else {
+        throw new Error(data.message || "Failed to delete users.");
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error("Error deleting users:", error);
+      toast.error(`Failed to delete users: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+      setConfirmSingleDeleteOpen(false);
+      setSelectedSingleUser("");
+    }
+  };
   const handleUpdate = () => {
     if (selectedUsers.length === 0) {
       toast.error("Please select at least one user to update.");
@@ -283,7 +331,13 @@ export default function AllUsers() {
       `/adminData/Management/UpdateUsers?emails=${selectedUsers.join(",")}`
     );
   };
-
+  const handlesingleUpdate = (userId: string) => {
+    if (userId === "") {
+      toast.error("Please select at least one user to update.");
+      return;
+    }
+    router.push(`/adminData/Management/EditUserProfile/${userId}`);
+  };
   const handleAssignProjectManager = () => {
     if (selectedUsers.length === 0) {
       toast.error(
@@ -293,6 +347,17 @@ export default function AllUsers() {
     }
 
     setConfirmAssignOpen(true);
+  };
+  const handleAssignSingleProjectManager = (email: string) => {
+    setSelectedSingleUser(email);
+    if (selectedSingleUser === "") {
+      toast.error(
+        "Please select at least one user to assign as Project Manager."
+      );
+      return;
+    }
+
+    setConfirmSingleAssignOpen(true);
   };
 
   const confirmAssignProjectManager = async () => {
@@ -345,7 +410,56 @@ export default function AllUsers() {
       setConfirmAssignOpen(false);
     }
   };
+  const confirmSingleAssignProjectManager = async () => {
+    setIsAssigning(true);
+    try {
+      const response = await fetch("/api/adminData/assignProjectManager", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: [selectedSingleUser] }),
+      });
 
+      const data = await response.json();
+      if (data.success || response.status === 207) {
+        toast.success(`${selectedSingleUser} is assigned as project manager`);
+
+        const refreshResponse = await fetch("/api/adminData/getAllUsers", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        });
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          if (refreshData.success) {
+            const validUsers = (refreshData.users || []).filter(
+              (u: any) => u && u.UserId
+            );
+            setUsers(validUsers);
+            setFilteredUsers(validUsers);
+          }
+        }
+
+        setSelectedSingleUser("");
+
+        if (response.status === 207 && data.details?.failedCount > 0) {
+          toast.error(
+            `Failed to assign role for ${data.details.failedCount} user(s). Check console.`
+          );
+          console.error("Assignment Failures:", data.details);
+        }
+      } else {
+        throw new Error(data.message || "Failed to assign role.");
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error("Error assigning role:", error);
+      toast.error(`Assignment failed: ${error.message}`);
+    } finally {
+      setIsAssigning(false);
+      setConfirmAssignOpen(false);
+    }
+  };
   const handleGoToDetails = (userId: string) => {
     router.push(
       `/adminData/Management/UserDetails/${encodeURIComponent(userId)}`
@@ -575,8 +689,7 @@ export default function AllUsers() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setSelectedUsers([user.email]);
-                                    handleUpdate();
+                                    handlesingleUpdate(user.UserId);
                                   }}
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
@@ -584,8 +697,9 @@ export default function AllUsers() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setSelectedUsers([user.email]);
-                                    handleAssignProjectManager();
+                                    handleAssignSingleProjectManager(
+                                      user.email
+                                    );
                                   }}
                                 >
                                   <UserPlus className="mr-2 h-4 w-4" />
@@ -595,8 +709,7 @@ export default function AllUsers() {
                                 <DropdownMenuItem
                                   className="text-red-600"
                                   onClick={() => {
-                                    setSelectedUsers([user.email]);
-                                    handleDelete();
+                                    handleSingleDelete(user.email);
                                   }}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
@@ -657,7 +770,46 @@ export default function AllUsers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      <Dialog
+        open={confirmSingleDeleteOpen}
+        onOpenChange={setConfirmSingleDeleteOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedSingleUser}? This action
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmSingleDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmSingleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={confirmAssignOpen} onOpenChange={setConfirmAssignOpen}>
         <DialogContent>
           <DialogHeader>
@@ -678,6 +830,47 @@ export default function AllUsers() {
             <Button
               variant="default"
               onClick={confirmAssignProjectManager}
+              disabled={isAssigning}
+            >
+              {isAssigning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Assign Role
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmSingleAssignOpen}
+        onOpenChange={setConfirmSingleAssignOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Role Assignment</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to assign Project Manager role to{" "}
+              {selectedSingleUser}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmSingleAssignOpen(false)}
+              disabled={isAssigning}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={confirmSingleAssignProjectManager}
               disabled={isAssigning}
             >
               {isAssigning ? (
