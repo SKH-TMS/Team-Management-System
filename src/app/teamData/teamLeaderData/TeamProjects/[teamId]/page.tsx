@@ -386,7 +386,7 @@ export default function TeamProjectsPage() {
                             </AvatarFallback>
                           </Avatar>
                         </TooltipTrigger>
-                        <TooltipContent>
+                        <TooltipContent className="bg-slate-50 text-black">
                           <div className="text-sm">
                             <p className="font-medium">
                               {member.firstname} {member.lastname}
