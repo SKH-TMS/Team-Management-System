@@ -395,7 +395,7 @@ export default function QuickCreateSubtaskPage() {
                     )}
                     {teams.map((team) => (
                       <SelectItem key={team.teamId} value={team.teamId}>
-                        {team.teamName}
+                        {team.teamName}----({team.teamId})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -427,7 +427,7 @@ export default function QuickCreateSubtaskPage() {
                     )}
                     {projects.map((proj) => (
                       <SelectItem key={proj.ProjectId} value={proj.ProjectId}>
-                        {proj.title}
+                        {proj.title}----({proj.ProjectId})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -464,7 +464,7 @@ export default function QuickCreateSubtaskPage() {
                     )}
                     {parentTasks.map((task) => (
                       <SelectItem key={task.TaskId} value={task.TaskId}>
-                        {task.title}
+                        {task.title}----({task.TaskId})
                       </SelectItem>
                     ))}
                   </SelectContent>
