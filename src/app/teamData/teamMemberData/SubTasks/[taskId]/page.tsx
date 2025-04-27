@@ -134,7 +134,7 @@ export default function TeamMemberSubtasksPage() {
     setError("");
     try {
       const res = await fetch(
-        `/api/teamData/teamMemberData/getsubtasks/${parentTaskId}`
+        `/api/teamData/teamMemberData/getSubtasks/${parentTaskId}`
       );
       const data: ApiResponse = await res.json();
       if (!res.ok || !data.success) {
